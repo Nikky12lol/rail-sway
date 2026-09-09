@@ -12,6 +12,13 @@ export type MaintRow = {
   status: string
 }
 
+const urgencyPill = (u: string) =>
+  u === 'critical'
+    ? 'bg-rose-100 text-rose-700'
+    : u === 'high'
+      ? 'bg-amber-100 text-amber-700'
+      : 'bg-primary-100 text-primary-700'
+
 export default function MaintenanceTable({
   rows,
   selected,
@@ -22,47 +29,47 @@ export default function MaintenanceTable({
   onToggle: (taskId: string) => void
 }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto rounded-xl">
       <table className="w-full text-sm">
         <thead>
-          <tr className="text-left text-gray-500 border-b">
-            <th className="py-2 pr-2"></th>
-            <th className="py-2 pr-4">Task</th>
-            <th className="py-2 pr-4">Dept</th>
-            <th className="py-2 pr-4">Section</th>
-            <th className="py-2 pr-4">Work</th>
-            <th className="py-2 pr-4">Dur (h)</th>
-            <th className="py-2 pr-4">Urgency</th>
-            <th className="py-2">Status</th>
+          <tr className="text-left text-slate-500 border-b border-slate-200">
+            <th className="py-3 pr-2 font-medium"></th>
+            <th className="py-3 pr-4 font-medium">Task</th>
+            <th className="py-3 pr-4 font-medium">Dept</th>
+            <th className="py-3 pr-4 font-medium">Section</th>
+            <th className="py-3 pr-4 font-medium">Work</th>
+            <th className="py-3 pr-4 font-medium">Dur (h)</th>
+            <th className="py-3 pr-4 font-medium">Urgency</th>
+            <th className="py-3 font-medium">Status</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.task_id} className="border-b last:border-0 hover:bg-gray-50">
-              <td className="py-2 pr-2">
+            <tr key={r.task_id} className="border-b border-slate-100 last:border-0 transition-colors hover:bg-primary-50/50">
+              <td className="py-3 pr-2">
                 <input
                   type="checkbox"
                   checked={selected.includes(r.task_id)}
                   onChange={() => onToggle(r.task_id)}
-                  className="accent-teal-600 w-4 h-4"
+                  className="accent-primary-600 w-4 h-4 cursor-pointer"
                 />
               </td>
-              <td className="py-2 pr-4 font-medium">{r.task_id}</td>
-              <td className="py-2 pr-4">{r.department}</td>
-              <td className="py-2 pr-4">{r.section}</td>
-              <td className="py-2 pr-4">{r.work_type}</td>
-              <td className="py-2 pr-4">{r.duration}</td>
-              <td className="py-2 pr-4">
-                <span className={`px-2 py-0.5 rounded-full text-xs ${r.urgency === 'critical' ? 'bg-red-100 text-red-700' : r.urgency === 'high' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+              <td className="py-3 pr-4 font-medium text-slate-800">{r.task_id}</td>
+              <td className="py-3 pr-4 text-slate-600">{r.department}</td>
+              <td className="py-3 pr-4 text-slate-600">{r.section}</td>
+              <td className="py-3 pr-4 text-slate-600">{r.work_type}</td>
+              <td className="py-3 pr-4 text-slate-600">{r.duration}</td>
+              <td className="py-3 pr-4">
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium uppercase tracking-wide ${urgencyPill(r.urgency)}`}>
                   {r.urgency}
                 </span>
               </td>
-              <td className="py-2 text-gray-500">{r.status}</td>
+              <td className="py-3 text-slate-500">{r.status}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      {rows.length === 0 && <p className="py-6 text-center text-gray-400">No maintenance requests found.</p>}
+      {rows.length === 0 && <p className="py-6 text-center text-slate-400">No maintenance requests found.</p>}
     </div>
   )
 }

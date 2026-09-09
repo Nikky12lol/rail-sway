@@ -25,19 +25,22 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-semibold">Operational Dashboard</h1>
-          <p className="text-sm text-gray-500">Bhadrak – Jajpur – Keonjhar Road corridor · live</p>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Operational Dashboard</h1>
+          <p className="text-slate-500 mt-1">Bhadrak – Jajpur – Keonjhar Road corridor · live</p>
         </div>
-        <span className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium">● System normal</span>
+        <span className="inline-flex items-center gap-2 text-xs font-medium px-3.5 py-1.5 rounded-full bg-emerald-100 text-emerald-700">
+          <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+          System normal
+        </span>
       </div>
       <StatsCards stats={stats} />
-      <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 h-[420px] bg-white rounded-xl shadow p-2 overflow-hidden">
+      <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 h-[420px] bg-white rounded-2xl shadow-soft border border-slate-200/60 p-2 overflow-hidden">
           <DashboardMap />
         </div>
-        <div className="bg-white rounded-xl shadow p-4">
+        <div className="bg-white rounded-2xl shadow-soft border border-slate-200/60 p-5">
           <PendingAlerts />
         </div>
       </div>

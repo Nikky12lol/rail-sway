@@ -10,8 +10,8 @@ export default function DecisionsPage() {
   }, [])
   return (
     <div>
-      <h1 className="text-2xl font-semibold mb-1">Decision History</h1>
-      <p className="text-sm text-gray-500 mb-6">Audit trail of AI recommendations and controller actions.</p>
+      <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-1">Decision History</h1>
+      <p className="text-slate-500 mb-8">Audit trail of AI recommendations and controller actions.</p>
       <DecisionHistoryTable rows={rows} />
     </div>
   )

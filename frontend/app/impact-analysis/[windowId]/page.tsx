@@ -42,7 +42,7 @@ export default function ImpactPage({ params }: { params: Promise<{ windowId: str
     }
   }
 
-  if (!block) return <p className="text-gray-500">Loading impact analysis…</p>
+  if (!block) return <p className="text-slate-500">Loading impact analysis…</p>
 
   const chartData = (siblings.length ? siblings : [block]).map((b: any) => ({
     affected_trains: b.affected_trains, priority_affected: b.priority_trains_affected,
@@ -51,25 +51,25 @@ export default function ImpactPage({ params }: { params: Promise<{ windowId: str
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold mb-1">Impact Analysis — Window #{block.id}</h1>
-      <p className="text-sm text-gray-500 mb-6">{block.section} · {new Date(block.start_time).toLocaleString('en-IN')} → {new Date(block.end_time).toLocaleString('en-IN')}</p>
+      <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-1">Impact Analysis — Window #{block.id}</h1>
+      <p className="text-slate-500 mb-8">{block.section} · {new Date(block.start_time).toLocaleString('en-IN')} → {new Date(block.end_time).toLocaleString('en-IN')}</p>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-8">
         {[
           ['Affected trains', block.affected_trains],
           ['Priority trains', block.priority_trains_affected],
           ['Est. delay (min)', block.estimated_delay],
           ['Impact score', block.impact_score],
         ].map(([k, v]) => (
-          <div key={k as string} className="bg-white rounded-xl shadow p-4">
-            <div className="text-2xl font-bold">{v as string}</div>
-            <div className="text-sm text-gray-500">{k as string}</div>
+          <div key={k as string} className="bg-white rounded-2xl shadow-soft border border-slate-200/60 p-5 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+            <div className="text-2xl font-bold text-slate-800">{v as string}</div>
+            <div className="text-sm text-slate-500">{k as string}</div>
           </div>
         ))}
       </div>
 
-      <div className="bg-white rounded-xl shadow p-5 mb-6">
-        <h3 className="font-semibold mb-3">Comparative impact</h3>
+      <div className="bg-white rounded-2xl shadow-soft border border-slate-200/60 p-6 mb-6">
+        <h3 className="font-semibold text-slate-800 mb-4">Comparative impact</h3>
         <ImpactTimeline windows={chartData} />
       </div>
 
@@ -80,9 +80,9 @@ export default function ImpactPage({ params }: { params: Promise<{ windowId: str
         onReject={() => decide('rejected')}
         busy={busy}
       />
-      {msg && <p className="mt-3 text-sm text-teal-700">{msg}</p>}
+      {msg && <p className="mt-3 text-sm text-primary-700">{msg}</p>}
       {block.controller_decision && (
-        <p className="mt-3 text-sm">Controller decision: <span className="font-semibold">{block.controller_decision}</span> ({block.status})</p>
+        <p className="mt-3 text-sm text-slate-600">Controller decision: <span className="font-semibold text-slate-800">{block.controller_decision}</span> ({block.status})</p>
       )}
     </div>
   )

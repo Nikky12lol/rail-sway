@@ -38,7 +38,7 @@ export default function DashboardMap() {
   return (
     <MapContainer center={[20.99, 86.3]} zoom={10} style={{ height: '100%', width: '100%' }}>
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-      <Polyline positions={corridor} color="#0d9488" weight={4} />
+      <Polyline positions={corridor} color="#4f46e5" weight={4} />
       {points.map((train) => (
         <Marker key={train.id} position={[train.lat, train.lng]}>
           <Popup>{train.id} – {train.status}</Popup>
