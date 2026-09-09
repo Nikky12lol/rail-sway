@@ -1,10 +1,12 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Calendar, BarChart3, History, Settings, Train } from 'lucide-react'
+import { LayoutDashboard, ClipboardList, TableProperties, Calendar, BarChart3, History, Settings, Train } from 'lucide-react'
 
 const navItems = [
   { href: '/', label: 'Dashboard', Icon: LayoutDashboard },
+  { href: '/maintenance', label: 'Maintenance Requests', Icon: ClipboardList },
+  { href: '/timetable', label: 'Timetable Management', Icon: TableProperties },
   { href: '/block-planner', label: 'Block Planner', Icon: Calendar },
   { href: '/impact-analysis/1', label: 'Impact Analysis', Icon: BarChart3 },
   { href: '/decisions', label: 'Decision History', Icon: History },

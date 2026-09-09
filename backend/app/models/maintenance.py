@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, Text, Enum
+from sqlalchemy import Column, Integer, String, DateTime, Date, Float, Boolean, Text, Enum
 from app.core.database import Base
 import enum
 from datetime import datetime
@@ -24,6 +24,7 @@ class MaintenanceRequest(Base):
     description = Column(Text, nullable=True)
     duration = Column(Float, nullable=False, default=2.0)  # hours
     urgency = Column(String(20), nullable=False, default="normal")  # low|normal|high|critical
+    requested_date = Column(Date, nullable=True)  # planned operating date (defaults to created date)
     compatibility = Column(Text, nullable=True)
     planning_status = Column(String(50), nullable=True, default="unplanned")
     block_required = Column(Boolean, default=True)

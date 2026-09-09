@@ -1,14 +1,24 @@
 from typing import List, Optional
+from datetime import date
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from app.models.maintenance import MaintenanceRequest
 
 
+def _today_iso() -> str:
+    return date.today().isoformat()
+
+
 SEED_REQUESTS = [
+    # ENG + SNT pair below is deliberately incompatible (track vs signalling)
+    # so a fresh demo always shows at least one conflict AND one good club.
     {"task_id": "MT-ENG-041", "department": "ENG", "section": "Bhadrak–Jajpur", "location": "Km 231/4-232/1", "work_type": "tamping", "duration": 2.5, "urgency": "high", "description": "Plain track tamping, BHC-JJKR Up line"},
     {"task_id": "MT-SNT-018", "department": "SNT", "section": "Bhadrak–Jajpur", "location": "Jajpur Cabin", "work_type": "signal_upgrade", "duration": 2.0, "urgency": "critical", "description": "Point motor replacement + testing"},
     {"task_id": "MT-TRD-007", "department": "TRD", "section": "Bhadrak–Jajpur", "location": "Km 228/0-229/5", "work_type": "ohe_maintenance", "duration": 1.5, "urgency": "normal", "description": "OHE contact wire attention"},
     {"task_id": "MT-ENG-042", "department": "ENG", "section": "Jajpur–Keonjhar Road", "location": "Km 245/2-246/0", "work_type": "ballast_cleaning", "duration": 3.0, "urgency": "normal", "description": "Ballast screening Dn line"},
+    {"task_id": "MT-TRD-011", "department": "TRD", "section": "Bhadrak–Jajpur", "location": "Km 235/0-236/2", "work_type": "ohe_maintenance", "duration": 2.0, "urgency": "high", "description": "OHE mast replacement, 2 spans"},
+    {"task_id": "MT-SNT-022", "department": "SNT", "section": "Bhadrak–Jajpur", "location": "Jajpur South Cabin", "work_type": "point_maintenance", "duration": 1.0, "urgency": "normal", "description": "Point lubrication + gap check"},
+    {"task_id": "MT-MECH-005", "department": "MECH", "section": "Bhadrak–Jajpur", "location": "BHC yard", "work_type": "inspection", "duration": 1.5, "urgency": "low", "description": "Rolling-stock brake inspection"},
 ]
 
 
@@ -59,8 +69,9 @@ class MaintenanceService:
     def seed_if_empty(self, db: Session) -> int:
         if db.query(MaintenanceRequest).count() > 0:
             return 0
+        today = date.today()
         for s in SEED_REQUESTS:
-            db.add(MaintenanceRequest(**s))
+            db.add(MaintenanceRequest(**s, requested_date=today))
         db.commit()
         return len(SEED_REQUESTS)
 

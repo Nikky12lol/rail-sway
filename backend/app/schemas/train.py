@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -24,6 +24,19 @@ class TrainCreate(TrainBase):
 
 class TrainOut(TrainBase):
     id: int
+    source: Optional[str] = "seed"
 
     class Config:
         from_attributes = True
+
+
+class ImportError(BaseModel):
+    row: int
+    reason: str
+
+
+class TrainImportResult(BaseModel):
+    imported: int = 0
+    skipped_duplicates: int = 0
+    rejected: int = 0
+    errors: List[ImportError] = []

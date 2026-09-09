@@ -10,6 +10,13 @@ import app.models  # noqa: F401  (register all models)
 async def lifespan(app: FastAPI):
     # Create tables
     Base.metadata.create_all(bind=engine)
+    # Additive columns for databases created before v2
+    try:
+        from app.core.database import ensure_extra_columns
+
+        ensure_extra_columns()
+    except Exception as e:
+        print(f"Column migration skipped: {e}")
     # Seed demo data on first run
     try:
         db = SessionLocal()

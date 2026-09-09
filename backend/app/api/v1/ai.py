@@ -73,7 +73,17 @@ async def full_plan(request: WindowRequest, db: Session = Depends(get_db)):
     saved = []
     for w in windows:
         obj = block_service.create_from_candidate(db, request.section, w, maintenance_ids=request.request_ids)
-        saved.append({"id": obj.id, **w})
+        saved.append({"id": obj.id, "section": request.section, **w})
+
+    # Persist the explanation on the recommended block so the impact-analysis
+    # page can show the genuine backend reason instead of a generic fallback.
+    best = rec.get("recommendation") or {}
+    if best.get("start"):
+        match = next((s for s in saved if s.get("start") == best.get("start")), None)
+        if match:
+            row = block_service.get(db, match["id"])
+            row.recommendation_reason = rec.get("reason", "")
+            db.commit()
 
     log = DecisionLog(
         tasks=json.dumps(request.request_ids),

@@ -18,3 +18,4 @@ class Train(Base):
     delay_minutes = Column(Float, default=0.0)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
+    source = Column(String(20), default="seed")  # seed|upload|manual|live

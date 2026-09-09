@@ -179,6 +179,7 @@ class RailSwayAI:
                     "start": start.isoformat(),
                     "end": end.isoformat(),
                     "affected_trains": impact["affected"],
+                    "affected_train_ids": impact["affected_train_ids"],
                     "priority_affected": impact["priority_affected"],
                     "conflicts": impact["conflicts"],
                     "tsr_required": impact["tsr"],
@@ -208,6 +209,7 @@ class RailSwayAI:
         score = self._score(len(affected), priority_affected, conflicts, total_delay, tsr)
         return {
             "affected": len(affected),
+            "affected_train_ids": [a["id"] for a in affected][:25],
             "priority_affected": priority_affected,
             "conflicts": conflicts,
             "tsr": tsr,

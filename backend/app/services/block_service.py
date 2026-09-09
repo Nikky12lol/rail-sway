@@ -2,7 +2,9 @@ from typing import List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
+import json
 from app.models.block import BlockWindow
+from app.models.decision import DecisionLog
 from app.models.maintenance import MaintenanceRequest, MaintenanceStatus
 
 
@@ -51,6 +53,7 @@ class BlockService:
         if reason:
             obj.recommendation_reason = reason
         # cascade status onto linked maintenance requests
+        tids: List[str] = []
         if obj.maintenance_ids:
             tids = [t.strip() for t in obj.maintenance_ids.split(",") if t.strip()]
             if tids:
@@ -59,6 +62,24 @@ class BlockService:
                     {"status": new_status, "scheduled_window_id": obj.id if decision == "approved" else None},
                     synchronize_session=False,
                 )
+        # audit the human decision so approve AND reject paths are traceable
+        db.add(
+            DecisionLog(
+                tasks=json.dumps(tids),
+                candidates=json.dumps([{
+                    "section": obj.section,
+                    "start": obj.start_time.isoformat() if obj.start_time else "",
+                    "end": obj.end_time.isoformat() if obj.end_time else "",
+                    "impact_score": obj.impact_score,
+                    "affected_trains": obj.affected_trains,
+                }]),
+                recommended=obj.start_time.isoformat() if obj.start_time else "",
+                reason=reason or obj.recommendation_reason,
+                controller_decision=decision,
+                status=decision,
+                user_id=user_id,
+            )
+        )
         db.commit()
         db.refresh(obj)
         return obj

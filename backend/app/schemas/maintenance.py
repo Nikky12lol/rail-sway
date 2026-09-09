@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
 from app.models.maintenance import MaintenanceStatus
 
 
@@ -13,6 +13,7 @@ class MaintenanceBase(BaseModel):
     description: Optional[str] = None
     duration: float = 2.0
     urgency: str = "normal"
+    requested_date: Optional[date] = None
     compatibility: Optional[str] = None
     planning_status: Optional[str] = "unplanned"
     block_required: bool = True
@@ -30,6 +31,7 @@ class MaintenanceUpdate(BaseModel):
     description: Optional[str] = None
     duration: Optional[float] = None
     urgency: Optional[str] = None
+    requested_date: Optional[date] = None
     compatibility: Optional[str] = None
     planning_status: Optional[str] = None
     block_required: Optional[bool] = None

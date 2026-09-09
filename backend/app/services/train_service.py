@@ -1,8 +1,16 @@
-from typing import List, Optional
+from typing import List, Optional, Any, Dict
 from datetime import date, datetime
 from sqlalchemy.orm import Session
 from app.models.train import Train
 from app.services.ir_integration import IRIntegration, mock_schedule_for_section
+
+# Columns accepted by the timetable import (case-insensitive). Only the
+# starred ones are required; the rest fall back to sane defaults.
+IMPORT_COLUMNS_DOC = (
+    "train_number*, train_name*, scheduled_time* (ISO, e.g. 2026-09-12T08:15:00), "
+    "train_type, priority (1-5), section, origin, destination, status, "
+    "delay_minutes, latitude, longitude. Direction is derived as origin → destination."
+)
 
 
 class TrainService:
@@ -58,7 +66,95 @@ class TrainService:
                     delay_minutes=m["delay_minutes"],
                     latitude=m["latitude"],
                     longitude=m["longitude"],
+                    source="seed",
                 )
             )
         db.commit()
         return len(mock_schedule_for_section(section, today))
+
+    # ---------- timetable import ----------
+    @staticmethod
+    def _parse_optional_float(value: Any, field: str) -> Optional[float]:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            raise ValueError(f"bad {field} '{value}'")
+
+    def import_timetable(self, db: Session, rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Validate, dedupe and persist parsed timetable rows.
+
+        Returns {"imported", "skipped_duplicates", "rejected", "errors"} where
+        errors is a capped list of {"row", "reason"} (row numbers are 1-based
+        including the header row, matching what the operator sees in Excel).
+        """
+        imported = 0
+        duplicates = 0
+        rejected = 0
+        errors: List[Dict[str, Any]] = []
+
+        for i, raw in enumerate(rows, start=2):
+            norm = {
+                (str(k) if k is not None else "").strip().lower():
+                (v.strip() if isinstance(v, str) else v)
+                for k, v in (raw or {}).items()
+            }
+            try:
+                num = str(norm.get("train_number") or "").strip()
+                name = str(norm.get("train_name") or "").strip()
+                st_raw = str(norm.get("scheduled_time") or "").strip()
+                if not num:
+                    raise ValueError("missing train_number")
+                if not name:
+                    raise ValueError("missing train_name")
+                if not st_raw:
+                    raise ValueError("missing scheduled_time")
+                try:
+                    st = datetime.fromisoformat(st_raw)
+                except ValueError:
+                    raise ValueError(f"bad scheduled_time '{st_raw}' (use ISO like 2026-09-12T08:15:00)")
+                try:
+                    prio = int(float(norm.get("priority", 3)))
+                except (TypeError, ValueError):
+                    raise ValueError(f"bad priority '{norm.get('priority')}'")
+                if not 1 <= prio <= 5:
+                    raise ValueError("priority must be 1-5")
+                exists = (
+                    db.query(Train)
+                    .filter(Train.train_number == num, Train.scheduled_time == st)
+                    .first()
+                )
+                if exists:
+                    duplicates += 1
+                    continue
+                db.add(
+                    Train(
+                        train_number=num,
+                        train_name=name,
+                        train_type=str(norm.get("train_type") or "passenger").strip() or "passenger",
+                        priority=prio,
+                        section=str(norm.get("section") or "Bhadrak–Jajpur").strip(),
+                        origin=(str(norm.get("origin")).strip() if norm.get("origin") not in (None, "") else None),
+                        destination=(str(norm.get("destination")).strip() if norm.get("destination") not in (None, "") else None),
+                        scheduled_time=st,
+                        status=str(norm.get("status") or "on_time").strip() or "on_time",
+                        delay_minutes=self._parse_optional_float(norm.get("delay_minutes"), "delay_minutes") or 0.0,
+                        latitude=self._parse_optional_float(norm.get("latitude"), "latitude"),
+                        longitude=self._parse_optional_float(norm.get("longitude"), "longitude"),
+                        source="upload",
+                    )
+                )
+                imported += 1
+            except ValueError as e:
+                rejected += 1
+                if len(errors) < 50:
+                    errors.append({"row": i, "reason": str(e)})
+
+        db.commit()
+        return {
+            "imported": imported,
+            "skipped_duplicates": duplicates,
+            "rejected": rejected,
+            "errors": errors,
+        }
