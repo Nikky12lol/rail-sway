@@ -26,11 +26,23 @@ COMPATIBILITY_MATRIX = {
 # High-risk work combos that force TSR
 TSR_WORK_TYPES = {"track_renewal", "ballast_cleaning", "bridge_inspection", "welding"}
 
+# Earliest slot a manual planner typically books first. The baseline is this
+# slot simulated with the IDENTICAL impact logic — deterministic, no randomness.
+BASELINE_START_HOUR = 8
+
 
 def _compat_key(a: str, b: str) -> bool:
     if a == b:
         return True
     return COMPATIBILITY_MATRIX.get((a, b), COMPATIBILITY_MATRIX.get((b, a), False))
+
+
+def _naive(dt):
+    """Drop timezone info so aware API input never crashes comparisons
+    against the naive wall-clock times stored in the database."""
+    if isinstance(dt, datetime) and dt.tzinfo is not None:
+        return dt.replace(tzinfo=None)
+    return dt
 
 
 class RailSwayAI:
@@ -140,6 +152,7 @@ class RailSwayAI:
     ) -> List[Dict[str, Any]]:
         if isinstance(day, date) and not isinstance(day, datetime):
             day = datetime(day.year, day.month, day.day, 0, 0, 0)
+        day = _naive(day)
 
         # normalise schedules
         norm = []
@@ -147,9 +160,11 @@ class RailSwayAI:
             st = t.get("scheduled_time")
             if isinstance(st, str):
                 try:
-                    st = datetime.fromisoformat(st)
+                    st = _naive(datetime.fromisoformat(st))
                 except ValueError:
                     continue
+            else:
+                st = _naive(st)
             if st is None:
                 continue
             norm.append(
@@ -184,6 +199,8 @@ class RailSwayAI:
                     "conflicts": impact["conflicts"],
                     "tsr_required": impact["tsr"],
                     "estimated_delay": round(impact["total_delay"], 1),
+                    "immediate_delay": round(impact["immediate_delay"], 1),
+                    "downstream_delay": round(impact["downstream_delay"], 1),
                     "impact_score": round(impact["score"], 2),
                 }
             )
@@ -193,19 +210,155 @@ class RailSwayAI:
         # that actually overlap trains, hiding the interesting candidates.
         return windows
 
+    # ---------- baseline vs AI comparison ----------
+    @staticmethod
+    def _block_hours(items: List[Dict], max_duration_hours: float) -> float:
+        items = [r.model_dump() if hasattr(r, "model_dump") else dict(r) for r in items]
+        return min(max([r.get("duration", 2.0) for r in items] + [max_duration_hours]), 4.0)
+
+    def compute_baseline(
+        self,
+        requests: List[Any],
+        train_schedules: List[Dict[str, Any]],
+        day: datetime | date,
+        max_duration_hours: float = 2.5,
+    ) -> Dict[str, Any]:
+        """Deterministic 'before Rail-Sway' baseline: the same grouped work
+        placed in the earliest morning slot (BASELINE_START_HOUR) without any
+        optimization, simulated with the IDENTICAL impact logic as candidates.
+        Same inputs always yield the same baseline."""
+        if isinstance(day, date) and not isinstance(day, datetime):
+            day = datetime(day.year, day.month, day.day, 0, 0, 0)
+        day = _naive(day)
+        items = [r.model_dump() if hasattr(r, "model_dump") else dict(r) for r in requests]
+        norm = []
+        for t in train_schedules:
+            st = t.get("scheduled_time")
+            if isinstance(st, str):
+                try:
+                    st = _naive(datetime.fromisoformat(st))
+                except ValueError:
+                    continue
+            else:
+                st = _naive(st)
+            if st is None:
+                continue
+            norm.append({
+                "id": t.get("train_number", t.get("id")),
+                "scheduled_time": st,
+                "priority": int(t.get("priority", 3)),
+            })
+        needs_tsr = any((r.get("work_type") in TSR_WORK_TYPES) for r in items)
+        hours = self._block_hours(items, max_duration_hours)
+        start = day.replace(hour=BASELINE_START_HOUR, minute=0, second=0, microsecond=0)
+        end = start + timedelta(hours=hours)
+        impact = self._simulate_impact(start, end, norm, base_tsr=needs_tsr)
+        return {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "label": "Baseline (earliest slot, no optimization)",
+            "affected_trains": impact["affected"],
+            "affected_train_ids": impact["affected_train_ids"],
+            "priority_affected": impact["priority_affected"],
+            "conflicts": impact["conflicts"],
+            "tsr_required": impact["tsr"],
+            "estimated_delay": round(impact["total_delay"], 1),
+            "immediate_delay": round(impact["immediate_delay"], 1),
+            "downstream_delay": round(impact["downstream_delay"], 1),
+            "impact_score": round(impact["score"], 2),
+        }
+
+    @staticmethod
+    def compare_with_baseline(baseline: Dict[str, Any], recommended: Dict[str, Any], requests: List[Any]) -> Dict[str, Any]:
+        """Estimated saving = baseline impact − AI impact, from real simulated
+        values. Minutes come from estimated_delay (genuinely minutes);
+        percent comes from impact_score (unitless — never presented as minutes).
+        Percent is omitted (None) when the baseline score is zero.
+
+        Occupation saving answers a different, defensible question: had the
+        grouped requests each taken a separate corridor block, the corridor
+        would be occupied for the SUM of their durations; coordinated, it is
+        occupied once for the recommended window duration."""
+        items = [r.model_dump() if hasattr(r, "model_dump") else dict(r) for r in requests]
+        request_count = len(items)
+        separate_hours = round(sum(float(r.get("duration", 0.0) or 0.0) for r in items), 2)
+        coordinated_hours = 0.0
+        try:
+            coordinated_hours = round(
+                (_naive(datetime.fromisoformat(recommended["end"])) - _naive(datetime.fromisoformat(recommended["start"]))).total_seconds() / 3600, 2
+            )
+        except (KeyError, ValueError, TypeError):
+            pass
+        occupation_saved = round(separate_hours - coordinated_hours, 2)
+        occupation_pct = round(occupation_saved / separate_hours * 100, 1) if separate_hours > 0 else None
+        d0 = float(baseline.get("estimated_delay", 0.0))
+        d1 = float(recommended.get("estimated_delay", 0.0))
+        s0 = float(baseline.get("impact_score", 0.0))
+        s1 = float(recommended.get("impact_score", 0.0))
+        saved = round(d0 - d1, 1)
+        pct = round((s0 - s1) / s0 * 100, 1) if s0 > 0 else None
+        b_span = f"{baseline['start'][11:16]}–{baseline['end'][11:16]}"
+        if d0 == 0 and d1 == 0:
+            explanation = (
+                "Both the baseline and the recommended window avoid train movements entirely, "
+                "so no delay saving is estimated. The recommendation stands on grouping and timing."
+            )
+        elif saved > 0:
+            explanation = (
+                f"Compared with the baseline {b_span} arrangement ({d0:.0f} min estimated delay, "
+                f"{baseline.get('affected_trains', 0)} trains), the recommended window reduces estimated "
+                f"operational impact by {saved:.0f} min while grouping {request_count} compatible request(s)."
+            )
+        elif saved < 0:
+            explanation = (
+                f"The recommended window accepts {abs(saved):.0f} min additional estimated delay versus the "
+                f"baseline {b_span} arrangement in exchange for lower overall estimated impact "
+                f"(score {s0} → {s1})."
+            )
+        else:
+            explanation = (
+                "The recommended window coincides with the baseline slot; no additional saving is estimated."
+            )
+        return {
+            "baseline_start": baseline.get("start"),
+            "baseline_end": baseline.get("end"),
+            "estimated_delay_before": d0,
+            "estimated_delay_after": d1,
+            "estimated_minutes_saved": saved,
+            "impact_score_before": s0,
+            "impact_score_after": s1,
+            "estimated_impact_reduction_percent": pct,
+            "affected_trains_before": baseline.get("affected_trains", 0),
+            "affected_trains_after": recommended.get("affected_trains", 0),
+            "priority_trains_before": baseline.get("priority_affected", 0),
+            "priority_trains_after": recommended.get("priority_affected", 0),
+            "occupation": {
+                "separate_hours": separate_hours,
+                "coordinated_hours": coordinated_hours,
+                "hours_saved": occupation_saved,
+                "percent": occupation_pct,
+                "request_count": request_count,
+            },
+            "explanation": explanation,
+        }
+
     def _simulate_impact(self, start: datetime, end: datetime, schedules: List[Dict], base_tsr: bool = False):
         affected = []
+        immediate_delay = 0.0
+        downstream_delay = 0.0
         for train in schedules:
             st = train["scheduled_time"]
             if start <= st <= end:
                 delay = (end - st).total_seconds() / 60 + 5
                 affected.append({"id": train["id"], "delay": delay, "priority": train.get("priority", 3)})
+                immediate_delay += delay
             elif end < st <= end + timedelta(hours=2) and affected:
                 # cascade: queued departures inherit congestion
                 delay = min(len(affected) * 4, 15)
                 if delay > 1:
                     affected.append({"id": train["id"], "delay": delay, "priority": train.get("priority", 3)})
-        total_delay = sum(a["delay"] for a in affected)
+                    downstream_delay += delay
+        total_delay = immediate_delay + downstream_delay
         priority_affected = sum(1 for a in affected if a["priority"] <= 2)
         conflicts = sum(1 for a in affected if a["delay"] > 15)
         tsr = bool(base_tsr or len(affected) > 20)
@@ -217,6 +370,8 @@ class RailSwayAI:
             "conflicts": conflicts,
             "tsr": tsr,
             "total_delay": total_delay,
+            "immediate_delay": immediate_delay,
+            "downstream_delay": downstream_delay,
             "score": score,
         }
 

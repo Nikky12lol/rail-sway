@@ -20,6 +20,7 @@ class DecisionOut(BaseModel):
     controller_decision: Optional[str] = None
     status: Optional[str] = None
     user_id: Optional[int] = None
+    comparison: Optional[str] = None
 
     class Config:
         from_attributes = True

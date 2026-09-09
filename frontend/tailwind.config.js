@@ -8,6 +8,7 @@ module.exports = {
     extend: {
       fontFamily: {
         sans: ['var(--font-poppins)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       colors: {
         primary: {
@@ -22,9 +23,17 @@ module.exports = {
           800: '#3730a3',
           900: '#312e81',
         },
+        ink: {
+          950: '#060B1A',
+          900: '#0A1226',
+          850: '#0D1630',
+          800: '#121D3A',
+          700: '#1B2949',
+          600: '#27375C',
+        },
       },
       boxShadow: {
-        soft: '0 2px 12px -2px rgb(15 23 42 / 0.08), 0 4px 24px -4px rgb(15 23 42 / 0.06)',
+        soft: '0 2px 12px -2px rgb(0 0 0 / 0.5)',
       },
     },
   },

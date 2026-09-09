@@ -69,6 +69,8 @@ async def full_plan(request: WindowRequest, db: Session = Depends(get_db)):
     trains = await train_service.get_for_section(db, request.section, request.date)
     windows = ai_engine.find_optimal_windows(req_dicts, trains, request.date, request.max_duration_hours)
     rec = ai_engine.generate_recommendation(windows)
+    baseline = ai_engine.compute_baseline(req_dicts, trains, request.date, request.max_duration_hours)
+    savings = ai_engine.compare_with_baseline(baseline, rec.get("recommendation") or {}, req_dicts)
 
     saved = []
     for w in windows:
@@ -92,8 +94,9 @@ async def full_plan(request: WindowRequest, db: Session = Depends(get_db)):
         reason=rec.get("reason", ""),
         controller_decision="pending",
         status="recommended",
+        comparison=json.dumps({"baseline": baseline, "savings": savings}, default=str),
     )
     db.add(log)
     db.commit()
 
-    return {"compatibility": compat, "windows": saved, "recommendation": rec}
+    return {"compatibility": compat, "windows": saved, "recommendation": rec, "baseline": baseline, "savings": savings}

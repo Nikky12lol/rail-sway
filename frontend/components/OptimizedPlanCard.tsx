@@ -1,11 +1,15 @@
 'use client'
-import { CheckCircle2, XCircle, Sparkles } from 'lucide-react'
+import { CheckCircle2, XCircle, ListOrdered, PartyPopper } from 'lucide-react'
+import SavingsVisual, { Savings } from './SavingsVisual'
+import StatusBadge, { deptTone } from './StatusBadge'
 
 export type PlanStats = {
   requests: number
   affected: number
   priority: number
   delay: number
+  immediate?: number
+  downstream?: number
   score: number
 }
 
@@ -26,92 +30,112 @@ function fmtDay(iso: string) {
 }
 
 export default function OptimizedPlanCard({
+  blockId,
   section,
   start,
   end,
   requestIds,
+  departments,
   stats,
   confidence,
   reason,
   onApprove,
+  onChooseAlternative,
   onReject,
   busy,
   decided,
+  savings,
 }: {
+  blockId?: number | null
   section: string
   start: string
   end: string
   requestIds: string[]
+  departments: string[]
   stats: PlanStats
   confidence: string
   reason: string
   onApprove: () => void
+  onChooseAlternative: () => void
   onReject: () => void
   busy?: boolean
   decided?: string | null
+  savings?: Savings | null
 }) {
-  const metrics: [string, string | number][] = [
-    ['Maintenance activities', stats.requests],
-    ['Affected trains', stats.affected],
-    ['Priority trains', stats.priority],
-    ['Estimated delay', `${stats.delay} min`],
-    ['Impact score', stats.score],
-  ]
+  const occ = savings?.occupation
   return (
-    <div className="rounded-2xl overflow-hidden shadow-soft border border-primary-200">
-      <div className="bg-gradient-to-r from-primary-700 via-primary-600 to-primary-500 px-6 py-4 flex items-center gap-3">
-        <Sparkles className="w-5 h-5 text-white" />
+    <div className="rounded-xl overflow-hidden border border-emerald-400/25 bg-ink-900">
+      <div className="px-5 py-4 border-b border-white/10 bg-emerald-500/[0.06] flex items-center gap-3 flex-wrap">
+        <span className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-300 font-bold">✓</span>
         <div>
-          <div className="text-white font-bold tracking-tight">AI-Recommended Block</div>
-          <div className="text-primary-100 text-xs">Lowest estimated operational impact among the evaluated candidate windows · {confidence} confidence</div>
+          <div className="font-bold tracking-tight text-slate-100">AI-assisted block plan{blockId ? <span className="text-slate-500 font-mono text-sm"> · BLOCK #{blockId}</span> : null}</div>
+          <div className="text-xs text-slate-400">{fmtDay(start)} · {fmt(start)} — {fmt(end)} · {section}</div>
+        </div>
+        <div className="ml-auto flex gap-1.5">
+          {departments.map((d) => <StatusBadge key={d} tone={deptTone(d)}>{d} ✓</StatusBadge>)}
         </div>
       </div>
-      <div className="bg-white px-6 py-5">
-        <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2 mb-4">
-          <div>
-            <div className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Section</div>
-            <div className="font-semibold text-slate-800">{section}</div>
-          </div>
-          <div>
-            <div className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Date</div>
-            <div className="font-semibold text-slate-800">{fmtDay(start)}</div>
-          </div>
-          <div>
-            <div className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Recommended window</div>
-            <div className="text-2xl font-bold text-slate-900">{fmt(start)} – {fmt(end)}</div>
-          </div>
+
+      <div className="px-5 py-4 grid md:grid-cols-2 gap-4">
+        <div className="rounded-lg border border-white/10 p-4">
+          <div className="section-label mb-2">Corridor occupation</div>
+          {occ ? (
+            <>
+              <div className="flex justify-between text-sm"><span className="text-slate-400">Before (separate blocks)</span><span className="font-semibold text-slate-200 tabular-nums">{occ.separate_hours} hrs</span></div>
+              <div className="flex justify-between text-sm mt-1"><span className="text-slate-400">After (coordinated)</span><span className="font-semibold text-slate-200 tabular-nums">{occ.coordinated_hours} hrs</span></div>
+              <div className="mt-2 text-lg font-bold tabular-nums">
+                {occ.hours_saved >= 0
+                  ? <span className="text-emerald-300">Time saved: {occ.hours_saved} hrs{occ.percent !== null ? ` (${occ.percent}%)` : ''}</span>
+                  : <span className="text-amber-300">Additional occupation: {Math.abs(occ.hours_saved)} hrs</span>}
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-slate-500">Occupation comparison unavailable for this plan.</p>
+          )}
         </div>
-        {requestIds.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 mb-4">
-            <span className="text-xs text-slate-400 mr-1">Grouped requests:</span>
-            {requestIds.map((id) => (
-              <span key={id} className="font-mono text-[11px] font-medium px-2 py-0.5 rounded-md bg-primary-50 text-primary-700 border border-primary-100">{id}</span>
-            ))}
+        <div className="rounded-lg border border-white/10 p-4">
+          <div className="section-label mb-2">Train impact (simulated)</div>
+          <div className="flex justify-between text-sm"><span className="text-slate-400">Trains affected</span><span className="font-semibold text-slate-200 tabular-nums">{stats.affected}{stats.priority ? <span className="text-rose-300"> ({stats.priority} priority)</span> : ''}</span></div>
+          <div className="flex justify-between text-sm mt-1"><span className="text-slate-400">Total estimated delay</span><span className="font-semibold text-slate-200 tabular-nums">{stats.delay} min</span></div>
+          {(stats.immediate !== undefined || stats.downstream !== undefined) && (
+            <div className="flex justify-between text-sm mt-1"><span className="text-slate-400">Immediate / downstream</span><span className="font-semibold text-slate-200 tabular-nums">{stats.immediate ?? '—'} / {stats.downstream ?? '—'} min</span></div>
+          )}
+          <div className="flex justify-between text-sm mt-1"><span className="text-slate-400">Impact score</span><span className="font-semibold text-primary-300 tabular-nums">{stats.score}</span></div>
+        </div>
+      </div>
+
+      <div className="px-5 pb-4">
+        <div className="section-label mb-1.5">Recommendation</div>
+        <p className="text-sm text-slate-300 leading-relaxed">{reason}</p>
+        <p className="mt-1 text-[11px] text-slate-500">Lowest estimated impact among evaluated windows · {confidence} confidence · AI recommends — the controller decides.</p>
+        {savings && (
+          <div className="mt-3 rounded-lg border border-white/10 p-4">
+            <SavingsVisual savings={savings} />
           </div>
         )}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
-          {metrics.map(([k, v]) => (
-            <div key={k} className="bg-slate-50 border border-slate-200/70 rounded-xl px-3 py-2.5">
-              <div className="text-lg font-bold text-slate-800">{v}</div>
-              <div className="text-xs text-slate-500">{k}</div>
-            </div>
-          ))}
-        </div>
-        <p className="text-sm text-slate-600 leading-relaxed mb-5">{reason}</p>
+      </div>
+
+      <div className="px-5 py-4 border-t border-white/10">
         {decided ? (
-          <p className={`text-sm font-medium px-4 py-2.5 rounded-xl ${decided === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
-            Already {decided} — duplicate decisions are not recorded. Run a new analysis or review another candidate.
+          <p className={`text-sm font-medium px-4 py-2.5 rounded-lg border flex items-center gap-2 ${decided === 'approved' ? 'bg-emerald-500/10 text-emerald-300 border-emerald-400/20' : 'bg-rose-500/10 text-rose-300 border-rose-400/20'}`}>
+            {decided === 'approved' ? <PartyPopper className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+            {decided === 'approved'
+              ? `Block approved — advisory record logged. ${requestIds.length} task(s) coordinated, ${stats.affected} train(s) affected, ${stats.delay} min estimated delay.`
+              : 'Block rejected — advisory record logged.'}
+            {' '}This panel does not execute railway operations.
           </p>
         ) : (
-        <div className="flex items-center gap-3">
-          <button onClick={onApprove} disabled={busy} className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-medium shadow-sm shadow-primary-600/25 transition-all hover:bg-primary-700 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none">
-            <CheckCircle2 className="w-4 h-4" /> Approve Block
-          </button>
-          <button onClick={onReject} disabled={busy} className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-slate-300 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none">
-            <XCircle className="w-4 h-4" /> Reject
-          </button>
-          <span className="ml-auto text-xs text-slate-400 hidden md:block">AI recommends — the controller decides</span>
-        </div>
+          <div className="flex gap-3 flex-wrap">
+            <button onClick={onApprove} disabled={busy} className="btn-primary flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4" /> {busy ? 'Recording…' : 'Approve plan'}
+            </button>
+            <button onClick={onChooseAlternative} disabled={busy} className="btn-ghost flex items-center gap-2">
+              <ListOrdered className="w-4 h-4" /> Modify / choose alternative
+            </button>
+            <button onClick={onReject} disabled={busy} className="px-5 py-2.5 rounded-lg text-sm font-medium text-rose-300/90 transition-all hover:bg-rose-500/10 active:scale-[0.98] disabled:opacity-50">
+              Reject
+            </button>
+          </div>
         )}
       </div>
     </div>

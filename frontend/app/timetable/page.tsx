@@ -2,19 +2,14 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Upload, Download, FileWarning } from 'lucide-react'
+import MetricStrip from '@/components/MetricStrip'
+import OverlapTimeline from '@/components/OverlapTimeline'
+import StatusBadge, { sourceTone, sourceLabel } from '@/components/StatusBadge'
 import { api } from '@/lib/api'
 
 type ImportStats = { imported: number; skipped_duplicates: number; rejected: number; cleared: number; errors: { row: number; reason: string }[] }
 
-const prioBadge = (p: number) =>
-  p <= 1 ? 'bg-rose-100 text-rose-700' : p === 2 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
-
-// SOURCE labels: uploaded | seed (demo) | demo (generated fallback) | live (external feed)
-const srcBadge = (s?: string) =>
-  s === 'upload' ? ['uploaded', 'bg-primary-100 text-primary-700']
-  : s === 'live' ? ['external', 'bg-emerald-100 text-emerald-700']
-  : s === 'demo' ? ['demo schedule', 'bg-amber-100 text-amber-700']
-  : ['seed demo', 'bg-slate-100 text-slate-500']
+const prioTone = (p: number) => (p <= 1 ? 'red' : p === 2 ? 'amber' : 'slate') as 'red' | 'amber' | 'slate'
 
 function fmtTime(iso: string) {
   try {
@@ -66,119 +61,116 @@ export default function TimetablePage() {
 
   return (
     <div>
-      <div className="flex items-start justify-between mb-8 flex-wrap gap-4">
+      <div className="flex items-start justify-between mb-5 flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-1">Timetable Management</h1>
-          <p className="text-slate-500">The railway&apos;s operational schedule — the second input to block planning.</p>
+          <div className="section-label mb-1">Timetable · operating constraint</div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-100">Railway Timetable</h1>
+          <p className="text-sm text-slate-400 mt-0.5">Section: Bhadrak – Jajpur – Keonjhar Road</p>
         </div>
-        <div className="flex gap-3">
-          <a href={api.sampleCsvUrl(day, section)} className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-300 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50 active:scale-[0.98]">
+        <div className="flex gap-2.5">
+          <a href={api.sampleCsvUrl(day, section)} className="btn-ghost flex items-center gap-2 !py-2 text-xs">
             <Download className="w-4 h-4" /> Sample CSV
           </a>
-          <button onClick={() => fileRef.current?.click()} disabled={busy} className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-medium shadow-sm shadow-primary-600/25 transition-all hover:bg-primary-700 active:scale-[0.98] disabled:opacity-50">
-            <Upload className="w-4 h-4" /> {busy ? 'Importing…' : 'Upload CSV / XLSX'}
+          <button onClick={() => fileRef.current?.click()} disabled={busy} className="btn-primary flex items-center gap-2 !py-2 text-xs">
+            <Upload className="w-4 h-4" /> {busy ? 'Importing…' : 'Upload CSV/XLSX'}
           </button>
           <input ref={fileRef} type="file" accept=".csv,.xlsx,.xlsm" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-6">
-        {[
-          ['Trains loaded', trains.length],
-          ['Uploaded rows', uploaded],
-          ['Seed / demo rows', trains.length - uploaded],
-          ['Operating date', day.split('-').reverse().join('/')],
-        ].map(([k, v]) => (
-          <div key={k as string} className="bg-white rounded-2xl shadow-soft border border-slate-200/60 p-5">
-            <div className="text-2xl font-bold text-slate-800">{v as string | number}</div>
-            <div className="text-sm text-slate-500">{k as string}</div>
-          </div>
-        ))}
+      <div className="mb-4">
+        <MetricStrip items={[
+          { label: 'Trains loaded', value: trains.length, sub: `${section} · ${day}` },
+          { label: 'Uploaded', value: uploaded },
+          { label: 'Priority ≤ P2', value: trains.filter((t) => (t.priority || 3) <= 2).length },
+          { label: 'Source', value: external ? 'External' : uploaded ? 'Uploaded' : 'Demo', sub: external ? 'IR feed configured' : 'seed / generated' },
+        ]} />
       </div>
 
-      <div className="bg-white rounded-2xl shadow-soft border border-slate-200/60 p-6 mb-6">
+      <div className="panel-pad mb-4">
         <div className="flex flex-wrap items-center gap-4">
-          <label className="text-sm font-medium text-slate-700">Section
-            <select value={section} onChange={(e) => { setSection(e.target.value); load(e.target.value, day) }} className="ml-2 border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500">
+          <label className="text-xs text-slate-400">Section
+            <select value={section} onChange={(e) => { setSection(e.target.value); load(e.target.value, day) }} className="input ml-2 !py-1.5">
               <option>Bhadrak–Jajpur</option>
               <option>Jajpur–Keonjhar Road</option>
               <option>Bhadrak–Keonjhar Road</option>
             </select>
           </label>
-          <label className="text-sm font-medium text-slate-700">Operating date
-            <input type="date" value={day} onChange={(e) => { setDay(e.target.value); load(section, e.target.value) }} className="ml-2 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
+          <label className="text-xs text-slate-400">Operating date
+            <input type="date" value={day} onChange={(e) => { setDay(e.target.value); load(section, e.target.value) }} className="input ml-2 !py-1.5" />
           </label>
-          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-            <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} className="accent-primary-600 w-4 h-4" />
+          <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+            <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} className="accent-primary-500 w-4 h-4" />
             Replace uploaded rows for this section/date on import
           </label>
-          <span className={`ml-auto text-xs font-medium px-3 py-1.5 rounded-full ${external ? 'bg-emerald-100 text-emerald-700' : uploaded ? 'bg-primary-100 text-primary-700' : 'bg-amber-100 text-amber-700'}`}>
-            {external ? 'External timetable feed' : uploaded ? `${uploaded} uploaded timetable row(s) in view` : 'Demo timetable — upload a file to replace it'}
-          </span>
         </div>
-        <p className="mt-4 text-xs text-slate-500 leading-relaxed">
-          Expected columns: <span className="font-mono">{columnsDoc?.columns || 'train_number*, train_name*, scheduled_time* (ISO), train_type, priority (1-5), section, origin, destination, status, delay_minutes, latitude, longitude'}</span>.
-          Direction is derived as origin → destination. This prototype is not connected to a live Indian Railways feed unless IR_API_BASE_URL is configured.
+        <p className="mt-3 text-[11px] text-slate-500 leading-relaxed">
+          Expected columns: <span className="font-mono text-slate-400">{columnsDoc?.columns || 'train_number*, train_name*, scheduled_time* (ISO), train_type, priority (1-5), section, origin, destination, status, delay_minutes, latitude, longitude'}</span>.
+          Direction is derived as origin → destination. Not connected to a live Indian Railways feed unless IR_API_BASE_URL is configured.
         </p>
       </div>
 
       {uploadError && (
-        <p className="mb-5 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 flex items-center gap-2">
+        <p className="mb-4 text-sm text-rose-300 bg-rose-500/10 border border-rose-400/20 rounded-lg px-4 py-2.5 flex items-center gap-2">
           <FileWarning className="w-4 h-4 shrink-0" /> {uploadError}
         </p>
       )}
 
       {stats && (
-        <div className="bg-white rounded-2xl shadow-soft border border-slate-200/60 p-6 mb-6">
-          <h3 className="font-semibold text-slate-800 mb-3">Import result</h3>
-          <div className="flex flex-wrap gap-2 text-sm">
-            <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 font-medium">{stats.imported} valid rows imported</span>
-            {stats.cleared > 0 && <span className="px-3 py-1 rounded-full bg-primary-100 text-primary-700 font-medium">{stats.cleared} old uploaded rows cleared</span>}
-            <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-600 font-medium">{stats.skipped_duplicates} duplicates skipped</span>
-            <span className={`px-3 py-1 rounded-full font-medium ${stats.rejected ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>{stats.rejected} rejected</span>
+        <div className="panel-pad mb-4">
+          <div className="section-label mb-2">Import result</div>
+          <div className="flex flex-wrap gap-2 text-xs font-medium">
+            <span className="px-3 py-1 rounded-md bg-emerald-500/15 text-emerald-300">{stats.imported} valid rows imported</span>
+            {stats.cleared > 0 && <span className="px-3 py-1 rounded-md bg-primary-500/15 text-primary-300">{stats.cleared} old uploaded rows cleared</span>}
+            <span className="px-3 py-1 rounded-md bg-white/5 text-slate-400">{stats.skipped_duplicates} duplicates skipped</span>
+            <span className={`px-3 py-1 rounded-md ${stats.rejected ? 'bg-rose-500/15 text-rose-300' : 'bg-white/5 text-slate-400'}`}>{stats.rejected} rejected</span>
           </div>
           {stats.errors.length > 0 && (
-            <ul className="mt-3 text-sm text-rose-700 space-y-1 max-h-40 overflow-auto">
-              {stats.errors.map((e, i) => <li key={i} className="font-mono text-xs">Row {e.row}: {e.reason}</li>)}
+            <ul className="mt-2 text-rose-300/90 space-y-1 max-h-36 overflow-auto font-mono text-[11px]">
+              {stats.errors.map((e, i) => <li key={i}>Row {e.row}: {e.reason}</li>)}
             </ul>
           )}
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow-soft border border-slate-200/60 overflow-hidden">
+      <div className="panel overflow-hidden mb-4">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[950px]">
+          <table className="tbl min-w-[900px]">
             <thead>
-              <tr className="text-left text-slate-500 border-b border-slate-200 bg-slate-50/80">
-                {['Train No.', 'Train Name', 'Direction', 'Section', 'Scheduled', 'Prio', 'Status', 'Source'].map((h) => (
-                  <th key={h} className="py-3.5 px-4 font-medium whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
+              <tr><th>Train</th><th>Type</th><th>Entry → Exit</th><th>Scheduled</th><th>Priority</th><th>Status</th><th>Source</th></tr>
             </thead>
             <tbody>
-              {trains.map((t) => {
-                const [srcLabel, srcCls] = srcBadge(t.source)
-                return (
-                  <tr key={`${t.train_number}-${t.scheduled_time}`} className="border-b border-slate-100 last:border-0 transition-colors hover:bg-primary-50/50">
-                    <td className="py-3 px-4 font-mono font-medium text-slate-800 whitespace-nowrap">{t.train_number}</td>
-                    <td className="py-3 px-4 text-slate-600">{t.train_name}</td>
-                    <td className="py-3 px-4 text-slate-600 whitespace-nowrap">{t.origin || '?'} → {t.destination || '?'}</td>
-                    <td className="py-3 px-4 text-slate-600 whitespace-nowrap">{t.section}</td>
-                    <td className="py-3 px-4 text-slate-600 whitespace-nowrap">{fmtTime(t.scheduled_time)}</td>
-                    <td className="py-3 px-4"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${prioBadge(t.priority)}`}>P{t.priority}</span></td>
-                    <td className="py-3 px-4 text-slate-600">{t.status}</td>
-                    <td className="py-3 px-4"><span className={`px-2 py-0.5 rounded-full text-xs font-medium uppercase ${srcCls}`}>{srcLabel}</span></td>
-                  </tr>
-                )
-              })}
+              {trains.map((t) => (
+                <tr key={`${t.train_number}-${t.scheduled_time}`}>
+                  <td className="whitespace-nowrap"><span className="font-mono font-medium text-slate-100">{t.train_number}</span> <span className="text-slate-500 text-xs">{t.train_name}</span></td>
+                  <td className="text-slate-400">{t.train_type}</td>
+                  <td className="text-slate-300 whitespace-nowrap">{t.origin || '?'} → {t.destination || '?'}</td>
+                  <td className="text-slate-300 whitespace-nowrap tabular-nums">{fmtTime(t.scheduled_time)}</td>
+                  <td><StatusBadge tone={prioTone(t.priority)}>P{t.priority}</StatusBadge></td>
+                  <td className="text-slate-400">{t.status}</td>
+                  <td><StatusBadge tone={sourceTone(t.source)}>{sourceLabel(t.source)}</StatusBadge></td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
-        {trains.length === 0 && <p className="py-8 text-center text-slate-400">No trains for this section/date — upload a timetable above.</p>}
+        {trains.length === 0 && <p className="py-6 text-center text-slate-500 text-sm">Timetable unavailable for this section/date — upload a file above.</p>}
       </div>
 
-      <p className="mt-4 text-sm text-slate-500">
-        Next step: run the analysis in the <Link href="/block-planner" className="font-medium text-primary-600 hover:underline">Block Planner</Link>.
+      <div className="panel-pad">
+        <OverlapTimeline
+          trains={trains.filter((t) => t.scheduled_time).map((t) => ({
+            train_number: t.train_number, scheduled_time: t.scheduled_time, priority: t.priority, level: 'clear' as const,
+          }))}
+          requests={[]}
+          windows={[]}
+          maxTrains={14}
+        />
+        <p className="mt-2 text-[11px] text-slate-600">Scheduled instants from the loaded timetable — not live train movements.</p>
+      </div>
+
+      <p className="mt-3 text-sm text-slate-500">
+        Next: <Link href="/block-planner" className="link">run the analysis in the AI Planner →</Link>
       </p>
     </div>
   )

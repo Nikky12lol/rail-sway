@@ -116,6 +116,7 @@ class TrainService:
         duplicates = 0
         rejected = 0
         errors: List[Dict[str, Any]] = []
+        seen: set = set()  # (train_number, scheduled_time) in this file (session has autoflush off)
 
         for i, raw in enumerate(rows, start=2):
             norm = {
@@ -143,7 +144,8 @@ class TrainService:
                     raise ValueError(f"bad priority '{norm.get('priority')}'")
                 if not 1 <= prio <= 5:
                     raise ValueError("priority must be 1-5")
-                exists = (
+                key = (num, st)
+                exists = key in seen or (
                     db.query(Train)
                     .filter(Train.train_number == num, Train.scheduled_time == st)
                     .first()
@@ -151,6 +153,7 @@ class TrainService:
                 if exists:
                     duplicates += 1
                     continue
+                seen.add(key)
                 db.add(
                     Train(
                         train_number=num,

@@ -68,10 +68,30 @@ class BlockService:
                     synchronize_session=False,
                 )
         # audit the human decision so approve AND reject paths are traceable
+        # carry the analysis comparison (baseline/savings) from the matching
+        # pending log so the benefit stays traceable after approval
+        comparison = None
+        if tids:
+            pending = (
+                db.query(DecisionLog)
+                .filter(DecisionLog.controller_decision == "pending")
+                .order_by(DecisionLog.timestamp.desc())
+                .limit(20)
+                .all()
+            )
+            want = json.dumps(tids)
+            for row in pending:
+                try:
+                    if json.dumps(json.loads(row.tasks or "[]")) == want and row.comparison:
+                        comparison = row.comparison
+                        break
+                except (ValueError, TypeError):
+                    continue
         db.add(
             DecisionLog(
                 tasks=json.dumps(tids),
                 candidates=json.dumps([{
+                    "id": obj.id,
                     "section": obj.section,
                     "start": obj.start_time.isoformat() if obj.start_time else "",
                     "end": obj.end_time.isoformat() if obj.end_time else "",
@@ -83,6 +103,7 @@ class BlockService:
                 controller_decision=decision,
                 status=decision,
                 user_id=user_id,
+                comparison=comparison,
             )
         )
         db.commit()

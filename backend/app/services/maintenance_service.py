@@ -1,8 +1,9 @@
-from typing import List, Optional
-from datetime import date
+from typing import List, Optional, Dict, Any
+from datetime import date, datetime
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from app.models.maintenance import MaintenanceRequest
+from app.utils.validators import VALID_DEPARTMENTS, VALID_URGENCY
 
 
 def _today_iso() -> str:
@@ -74,6 +75,75 @@ class MaintenanceService:
             db.add(MaintenanceRequest(**s, requested_date=today))
         db.commit()
         return len(SEED_REQUESTS)
+
+    # ---------- CSV/XLSX import ----------
+    def import_requests(self, db: Session, rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Validate and persist parsed maintenance-request rows.
+
+        Required: task_id, department (known code), section, location, work_type.
+        Optional: description, duration (0-12h, default 2), urgency, requested_date (ISO).
+        Duplicates (existing task_id) are skipped and reported, never overwritten.
+        """
+        imported = 0
+        duplicates = 0
+        rejected = 0
+        errors: List[Dict[str, Any]] = []
+        seen: set = set()  # task_ids in this file (session has autoflush off)
+
+        for i, raw in enumerate(rows, start=2):
+            norm = {
+                (str(k) if k is not None else "").strip().lower():
+                (v.strip() if isinstance(v, str) else v)
+                for k, v in (raw or {}).items()
+            }
+            try:
+                task_id = str(norm.get("task_id") or "").strip()
+                dept = str(norm.get("department") or "").strip().upper()
+                section = str(norm.get("section") or "").strip()
+                location = str(norm.get("location") or "").strip()
+                work_type = str(norm.get("work_type") or "").strip()
+                if not task_id:
+                    raise ValueError("missing task_id")
+                if dept not in VALID_DEPARTMENTS:
+                    raise ValueError(f"unknown department '{norm.get('department')}' (use {sorted(VALID_DEPARTMENTS)})")
+                if not section:
+                    raise ValueError("missing section")
+                if not location:
+                    raise ValueError("missing location")
+                if not work_type:
+                    raise ValueError("missing work_type")
+                try:
+                    duration = float(norm.get("duration", 2.0) or 2.0)
+                except (TypeError, ValueError):
+                    raise ValueError(f"bad duration '{norm.get('duration')}'")
+                if not 0 < duration <= 12:
+                    raise ValueError("duration must be 0–12 hours")
+                urgency = str(norm.get("urgency") or "normal").strip().lower()
+                if urgency not in VALID_URGENCY:
+                    raise ValueError(f"bad urgency '{urgency}'")
+                req_date = None
+                if norm.get("requested_date") not in (None, ""):
+                    try:
+                        req_date = date.fromisoformat(str(norm.get("requested_date")).strip())
+                    except ValueError:
+                        raise ValueError(f"bad requested_date '{norm.get('requested_date')}' (use YYYY-MM-DD)")
+                if task_id in seen or db.query(MaintenanceRequest).filter(MaintenanceRequest.task_id == task_id).first():
+                    duplicates += 1
+                    continue
+                seen.add(task_id)
+                db.add(MaintenanceRequest(
+                    task_id=task_id, department=dept, section=section, location=location,
+                    work_type=work_type, description=(str(norm.get("description")).strip() if norm.get("description") not in (None, "") else None),
+                    duration=duration, urgency=urgency, requested_date=req_date,
+                ))
+                imported += 1
+            except ValueError as e:
+                rejected += 1
+                if len(errors) < 50:
+                    errors.append({"row": i, "reason": str(e)})
+
+        db.commit()
+        return {"imported": imported, "skipped_duplicates": duplicates, "rejected": rejected, "errors": errors}
 
     async def get_by_ids_async(self, db: Session, task_ids: List[str]):
         # kept for ai.py compat: sync DB access wrapped as async signature

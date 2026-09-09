@@ -21,6 +21,7 @@ def get_db():
 EXTRA_COLUMNS = {
     "maintenance_requests": [("requested_date", "DATE")],
     "trains": [("source", "VARCHAR(20) DEFAULT 'seed'")],
+    "decision_logs": [("comparison", "TEXT")],
 }
 
 

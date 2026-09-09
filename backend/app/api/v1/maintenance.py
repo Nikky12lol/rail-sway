@@ -1,12 +1,13 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, UploadFile, File, HTTPException
 from typing import Optional, List
 from datetime import date
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from app.core.database import get_db
 from app.models.maintenance import MaintenanceRequest
-from app.schemas.maintenance import MaintenanceCreate, MaintenanceUpdate, MaintenanceOut
+from app.schemas.maintenance import MaintenanceCreate, MaintenanceUpdate, MaintenanceOut, MaintenanceImportResult
 from app.services.maintenance_service import MaintenanceService
+from app.utils.file_import import parse_upload
 
 router = APIRouter()
 service = MaintenanceService()
@@ -35,6 +36,32 @@ def list_requests(status: Optional[str] = Query(None), section: Optional[str] = 
 @router.post("", response_model=MaintenanceOut, status_code=201)
 def create_request(payload: MaintenanceCreate, db: Session = Depends(get_db)):
     return service.create(db, payload)
+
+
+MAINTENANCE_COLUMNS_DOC = (
+    "task_id*, department* (ENG, SNT, TRD, MECH, ELEC, OPTG), section*, location*, "
+    "work_type*, description, duration (0-12h, default 2), urgency (low, normal, high, critical), "
+    "requested_date (YYYY-MM-DD)"
+)
+
+
+@router.get("/columns")
+def import_columns():
+    """Document the expected maintenance-request file format for the upload UI."""
+    return {
+        "formats": ["csv", "xlsx"],
+        "columns": MAINTENANCE_COLUMNS_DOC,
+        "required": ["task_id", "department", "section", "location", "work_type"],
+    }
+
+
+@router.post("/import", response_model=MaintenanceImportResult)
+async def import_requests(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    content = await file.read()
+    rows = parse_upload(file.filename or "", content)
+    if not rows:
+        raise HTTPException(status_code=400, detail="No data rows found in file")
+    return service.import_requests(db, rows)
 
 
 @router.get("/{request_id}", response_model=MaintenanceOut)

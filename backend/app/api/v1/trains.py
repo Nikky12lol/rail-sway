@@ -10,6 +10,7 @@ from app.schemas.train import TrainCreate, TrainOut, TrainImportResult
 from app.models.train import Train
 from app.services.train_service import TrainService, IMPORT_COLUMNS_DOC
 from app.services.ir_integration import mock_schedule_for_section
+from app.utils.file_import import parse_upload
 
 router = APIRouter()
 service = TrainService()
@@ -45,45 +46,6 @@ async def live_trains(section: str = "Bhadrak–Jajpur", day: Optional[date] = N
         st = t.get("scheduled_time")
         out.append({**t, "scheduled_time": st.isoformat() if hasattr(st, "isoformat") else st})
     return {"section": section, "date": d.isoformat(), "count": len(out), "trains": out}
-
-
-def _parse_csv(content: bytes) -> List[dict]:
-    try:
-        text = content.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        raise HTTPException(status_code=400, detail="CSV must be UTF-8 encoded")
-    try:
-        reader = csv.DictReader(io.StringIO(text))
-        if not reader.fieldnames:
-            raise HTTPException(status_code=400, detail="CSV has no header row")
-        return [dict(r) for r in reader if any((v or "").strip() for v in r.values())]
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not parse CSV: {e}")
-
-
-def _parse_xlsx(content: bytes) -> List[dict]:
-    try:
-        from openpyxl import load_workbook
-    except ImportError:
-        raise HTTPException(status_code=400, detail="XLSX support not installed (openpyxl missing)")
-    try:
-        wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
-        ws = wb.active
-        rows = list(ws.iter_rows(values_only=True))
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not parse XLSX: {e}")
-    if not rows or not any(rows[0]):
-        raise HTTPException(status_code=400, detail="XLSX sheet is empty")
-    headers = [str(h).strip() if h is not None else "" for h in rows[0]]
-    out = []
-    for r in rows[1:]:
-        vals = [("" if v is None else v) for v in r]
-        if not any(str(v).strip() for v in vals):
-            continue
-        out.append(dict(zip(headers, vals)))
-    return out
 
 
 @router.get("/columns")
@@ -133,16 +95,8 @@ def sample_csv(day: Optional[date] = None, section: str = "Bhadrak–Jajpur"):
 async def import_timetable(file: UploadFile = File(...), replace: bool = Query(False, description="Delete previously uploaded rows for this section/date before importing"),
                            section: Optional[str] = Query(None), day: Optional[date] = Query(None),
                            db: Session = Depends(get_db)):
-    name = (file.filename or "").lower()
     content = await file.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty")
-    if name.endswith(".csv"):
-        rows = _parse_csv(content)
-    elif name.endswith((".xlsx", ".xlsm")):
-        rows = _parse_xlsx(content)
-    else:
-        raise HTTPException(status_code=400, detail="Only .csv and .xlsx files are supported")
+    rows = parse_upload(file.filename or "", content)
     if not rows:
         raise HTTPException(status_code=400, detail="No data rows found in file")
     cleared = service.clear_uploaded(db, section=section, day=day) if replace else 0

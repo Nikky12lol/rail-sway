@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    from app.api.v1 import auth, maintenance, trains, blocks, ai, decisions
+    from app.api.v1 import auth, maintenance, trains, blocks, ai, decisions, system
 
     app = FastAPI(title="Rail-Sway API", version="1.0.0", lifespan=lifespan)
     app.add_middleware(
@@ -48,6 +48,7 @@ def create_app() -> FastAPI:
     app.include_router(blocks.router, prefix="/api/v1/blocks", tags=["blocks"])
     app.include_router(ai.router, prefix="/api/v1/ai", tags=["ai"])
     app.include_router(decisions.router, prefix="/api/v1/decisions", tags=["decisions"])
+    app.include_router(system.router, prefix="/api/v1/system", tags=["system"])
 
     @app.get("/health")
     async def health():

@@ -128,6 +128,8 @@ npm run dev   # Windows shells with blocked .ps1: use npm.cmd run dev
 |---|---|---|
 | POST | /api/v1/auth/register, /login, /me, /seed-admin | JWT auth |
 | GET/POST/PATCH/DELETE | /api/v1/maintenance (+`/seed`) | Request register (now with `requested_date`) |
+| POST | /api/v1/maintenance/import | CSV/XLSX request import (validated, duplicates skipped) |
+| GET | /api/v1/maintenance/columns | Documents the request file format |
 | GET/POST | /api/v1/trains (+`/seed`, `/live`) | Train register + live/IR fallback |
 | GET | /api/v1/trains/columns | Documents the accepted file format |
 | GET | /api/v1/trains/sample?day=&section= | Generates a same-date sample CSV |
@@ -136,8 +138,30 @@ npm run dev   # Windows shells with blocked .ps1: use npm.cmd run dev
 | POST | /api/v1/ai/windows | All evaluated windows, ranked (persisted with `affected_train_ids`) |
 | POST | /api/v1/ai/recommend | Pick best window |
 | POST | /api/v1/ai/full-plan | compat + windows + recommendation + log; persists explanation on best block |
-| GET/POST | /api/v1/blocks, /blocks/{id}/decision | Approve/reject (writes audit log, cascades request status) |
-| GET | /api/v1/decisions | Audit trail |
+| | | Also returns `baseline` + `savings` (see below) |
+| GET/POST | /api/v1/blocks, /blocks/{id}/decision | Approve/reject (409 on duplicates, optional auth, writes audit log) |
+| GET | /api/v1/decisions | Audit trail (incl. stored baseline/savings comparison) |
+| GET | /api/v1/system/status | Non-secret status: feed/AI flags, dialect, table counts |
+
+## Estimated operational saving (baseline vs AI)
+
+**Baseline definition:** the same grouped maintenance work placed in the
+earliest morning slot (08:00) without any optimization, simulated with the
+identical impact logic as the candidates. Deterministic — same inputs always
+give the same baseline.
+
+- `estimated_minutes_saved` = baseline `estimated_delay` − AI `estimated_delay`
+  (both genuine minutes from the cascade simulation).
+- `estimated_impact_reduction_percent` = baseline-vs-AI `impact_score`
+  reduction (the score is unitless — never presented as minutes; omitted when
+  the baseline score is zero, so no division by zero).
+- Before/after affected-train and priority-train counts included.
+- `occupation`: separate (Σ grouped durations) vs coordinated (recommended span)
+  corridor hours, with signed hours saved + percent.
+- Each window also reports `immediate_delay` (in-block trains) and
+  `downstream_delay` (cascade tail); they sum to `estimated_delay`.
+- The comparison is stored on the analysis `DecisionLog` row and carried onto
+  the approve/reject row, so history shows per-decision savings.
 
 ## Timetable file format
 

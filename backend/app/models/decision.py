@@ -15,3 +15,4 @@ class DecisionLog(Base):
     controller_decision = Column(String(20), nullable=True)  # approved|rejected|modified
     status = Column(String(20), default="logged")
     user_id = Column(Integer, nullable=True)
+    comparison = Column(Text, nullable=True)  # JSON {baseline, savings} carried from analysis to audit

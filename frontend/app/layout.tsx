@@ -10,17 +10,19 @@ const poppins = Poppins({
 })
 
 export const metadata: Metadata = {
-  title: 'Rail-Sway',
-  description: 'Intelligent Maintenance Coordination',
+  title: 'Rail-Sway · AI Maintenance Block Optimizer',
+  description: 'AI-assisted railway block planning decision support',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={poppins.variable}>
-      <body className="bg-slate-50 font-sans text-slate-900">
+      <body className="bg-ink-950 font-sans text-slate-200">
         <div className="flex min-h-screen">
           <Sidebar />
-          <main className="flex-1 overflow-auto p-8 max-w-[1400px]">{children}</main>
+          <main className="flex-1 overflow-auto min-w-0">
+            <div className="max-w-[1440px] mx-auto px-6 py-6">{children}</div>
+          </main>
         </div>
       </body>
     </html>

@@ -1,13 +1,18 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...init,
-  });
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      ...init,
+    })
+  } catch {
+    throw new Error(`Cannot reach AI planning service at ${API_BASE} — is the backend running?`)
+  }
   if (!res.ok) {
-    const data = await res.json().catch(() => ({} as any));
-    throw new Error((data as any).detail || `API ${path} failed: ${res.status}`);
+    const data = await res.json().catch(() => ({} as any))
+    throw new Error(`AI planning service returned HTTP ${res.status}${(data as any).detail ? ` — ${(data as any).detail}` : ''}`)
   }
   return res.json() as Promise<T>;
 }
@@ -17,6 +22,17 @@ export const api = {
   maintenance: (day?: string) =>
     req<any[]>(`/maintenance${day ? `?day=${day}` : ''}`).catch(() => mockMaintenance),
   maintenanceCreate: (payload: any) => req<any>('/maintenance', { method: 'POST', body: JSON.stringify(payload) }),
+  maintenanceDelete: (id: number) => req<any>(`/maintenance/${id}`, { method: 'DELETE' }),
+  maintenanceColumns: () => req<any>('/maintenance/columns').catch(() => null),
+  maintenanceImport: async (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await fetch(`${API_BASE}/maintenance/import`, { method: 'POST', body: form })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.detail || `Import failed: ${res.status}`)
+    return data as { imported: number; skipped_duplicates: number; rejected: number; errors: { row: number; reason: string }[] }
+  },
+  systemStatus: () => req<any>('/system/status').catch(() => null),
   trainsLive: (section = 'Bhadrak–Jajpur', day?: string) =>
     req<{ trains: any[] }>(`/trains/live?section=${encodeURIComponent(section)}${day ? `&day=${day}` : ''}`)
       .then((d) => d.trains)

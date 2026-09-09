@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, date
 from app.models.maintenance import MaintenanceStatus
 
@@ -47,3 +47,15 @@ class MaintenanceOut(MaintenanceBase):
 
     class Config:
         from_attributes = True
+
+
+class MaintenanceImportError(BaseModel):
+    row: int
+    reason: str
+
+
+class MaintenanceImportResult(BaseModel):
+    imported: int = 0
+    skipped_duplicates: int = 0
+    rejected: int = 0
+    errors: List[MaintenanceImportError] = []
