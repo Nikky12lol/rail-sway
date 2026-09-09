@@ -13,6 +13,51 @@ with minimum train disruption.
   impact comparison. Works offline with mock fallback if the API is down.
 - **docker-compose.yml** — Postgres, Redis, backend, celery worker, frontend.
 
+-              USER
+               │
+               ▼
+       Select maintenance
+          requirements
+               │
+               ▼
+        FastAPI backend
+               │
+               ▼
+     Compatibility engine
+               │
+               ▼
+     Group compatible work
+               │
+               ▼
+       Search time windows
+               │
+               ▼
+     Simulate train impacts
+               │
+               ▼
+       ML impact scoring
+               │
+               ▼
+        Rank candidates
+               │
+               ▼
+       LLM explanation
+               │
+               ▼
+       ┌───────────────┐
+       │ Recommendation│
+       └───────┬───────┘
+               │
+          Human decision
+           ↙         ↘
+       APPROVE      REJECT
+           │
+           ▼
+       Audit trail
+
+
+
+
 ## Quick start
 
 ```bash
