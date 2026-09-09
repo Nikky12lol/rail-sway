@@ -42,15 +42,10 @@ export default function RequestsPage() {
     const pool = rows.filter((r) => r.status === 'pending')
     const working = selected.length ? pool.filter((r) => selected.includes(r.task_id)) : pool
     if (!working.length) { setCompat({}); setCompatSummary(''); return }
-    fetch(`${api.base}/ai/compatibility`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(working.map((r) => ({
-        task_id: r.task_id, department: r.department, section: r.section,
-        work_type: r.work_type, duration: r.duration, urgency: r.urgency,
-      }))),
-    })
-      .then((r) => (r.ok ? r.json() : null))
+    api.compatibility(working.map((r) => ({
+      task_id: r.task_id, department: r.department, section: r.section,
+      work_type: r.work_type, duration: r.duration, urgency: r.urgency,
+    })))
       .then((data) => {
         if (!data) return
         const map: Record<string, 'compatible' | 'conflict'> = {}

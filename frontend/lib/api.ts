@@ -1,4 +1,30 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+const DEV_API_BASE = 'http://localhost:8000/api/v1';
+
+/**
+ * Single source of truth for the backend URL.
+ * - Build time: NEXT_PUBLIC_API_URL is baked into the bundle (set it on the
+ *   host BEFORE building, e.g. Railway frontend service variable).
+ * - Local dev: falls back to localhost.
+ * - Production without the variable: still falls back (last resort) but logs
+ *   a loud misconfiguration error instead of failing silently.
+ */
+function resolveApiBase(): string {
+  const configured = process.env.NEXT_PUBLIC_API_URL;
+  if (configured) return configured;
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+    if (!isLocal) {
+      console.error(
+        'Rail-Sway misconfigured: NEXT_PUBLIC_API_URL is not set, so API calls fall back to localhost. ' +
+        'Set NEXT_PUBLIC_API_URL to the backend URL and rebuild/redeploy the frontend.'
+      );
+    }
+  }
+  return DEV_API_BASE;
+}
+
+const API_BASE = resolveApiBase();
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response
@@ -42,6 +68,12 @@ export const api = {
   fullPlan: (payload: any) => req<any>('/ai/full-plan', { method: 'POST', body: JSON.stringify(payload) }),
   recommend: (windows: any[]) => req<any>('/ai/recommend', { method: 'POST', body: JSON.stringify(windows) }),
   blocks: () => req<any[]>('/blocks').catch(() => []),
+  getBlock: (id: string | number) =>
+    fetch(`${API_BASE}/blocks/${id}`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+  blocksBySection: (section: string) =>
+    fetch(`${API_BASE}/blocks?section=${encodeURIComponent(section)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+  compatibility: (requests: any[]) =>
+    req<any>('/ai/compatibility', { method: 'POST', body: JSON.stringify(requests) }),
   decide: (id: number, decision: string) =>
     req<any>(`/blocks/${id}/decision`, { method: 'POST', body: JSON.stringify({ decision }) }),
   decisions: () => req<any[]>('/decisions').catch(() => []),

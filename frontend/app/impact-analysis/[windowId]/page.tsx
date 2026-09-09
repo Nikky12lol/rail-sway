@@ -56,14 +56,12 @@ export default function ImpactPage({ params }: { params: Promise<{ windowId: str
   const [missing, setMissing] = useState(false)
 
   useEffect(() => {
-    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
-    fetch(`${base}/blocks/${windowId}`)
-      .then((r) => (r.ok ? r.json() : null))
+    api.getBlock(windowId)
       .then(async (b) => {
         if (!b) { setMissing(true); return }
         setBlock(b)
         const [sib, live] = await Promise.all([
-          fetch(`${base}/blocks?section=${encodeURIComponent(b.section)}`).then((r) => r.json()).catch(() => [b]),
+          api.blocksBySection(b.section),
           api.trainsLive(b.section).catch(() => []),
         ])
         setSiblings(Array.isArray(sib) && sib.length ? sib : [b])
@@ -90,8 +88,7 @@ export default function ImpactPage({ params }: { params: Promise<{ windowId: str
       setMsg(`Block ${decision} — advisory record logged. This panel does not execute railway operations.`)
     } catch (e: any) {
       setMsg(/409|already/i.test(e.message || '') ? `Already decided: ${e.message}` : `Decision failed (${e.message}).`)
-      const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
-      fetch(`${base}/blocks/${windowId}`).then((r) => (r.ok ? r.json() : null)).then((b) => b && setBlock(b)).catch(() => {})
+      api.getBlock(windowId).then((b) => b && setBlock(b))
     } finally {
       setBusy(false)
     }
