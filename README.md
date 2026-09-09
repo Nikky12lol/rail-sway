@@ -186,8 +186,81 @@ dropped; invalid rows are rejected with row numbers and reasons.
 
 ## Production notes
 
-- Never commit `.env` / `.env.local` / `*.db` (all gitignored).
+- Never commit `.env` / `.env.local` / `*.db` (all gitignored; only `.example` files are tracked).
 - `Base.metadata.create_all` covers first boot; two post-v1 columns
-  (`maintenance_requests.requested_date`, `trains.source`) are added to older
-  databases automatically by `ensure_extra_columns()` on startup.
+  (`maintenance_requests.requested_date`, `trains.source`,
+  `decision_logs.comparison`) are added to older databases automatically by
+  `ensure_extra_columns()` on startup. Seed data is inserted only into empty
+  tables — restarts never wipe or duplicate data.
+- Uploads are parsed in memory and persisted as rows in the database, so
+  CSV/XLSX import works on ephemeral container disks.
+- Without `GEMINI_API_KEY`/`OPENAI_API_KEY` the heuristic recommendation is
+  used; without `IR_API_BASE_URL` the demo/seed timetable is used. The demo
+  never fails for missing optional keys.
 - Put the stack behind TLS + WAF; restrict CORS `ALLOWED_ORIGINS`.
+
+## Production architecture (Railway)
+
+```
+Judge → https://<frontend>.up.railway.app (Next.js)
+            │  NEXT_PUBLIC_API_URL=https://<backend>.up.railway.app/api/v1
+            ▼
+        https://<backend>.up.railway.app (FastAPI, $PORT, 0.0.0.0)
+            │  DATABASE_URL=postgresql://… (Railway Postgres plugin)
+            ▼
+        Railway PostgreSQL (persistent volume — survives redeploys)
+```
+
+No Redis/worker service is required for the demo: AI analysis runs
+synchronously in the API. (The Celery worker in `docker-compose.yml` is for
+local/full-stack use only.)
+
+## Required environment variables
+
+| Service | Var | Value |
+|---|---|---|
+| Backend | `DATABASE_URL` | Auto-provided by Railway Postgres plugin (`postgresql://…`) |
+| Backend | `SECRET_KEY` | Generate: `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
+| Backend | `ALLOWED_ORIGINS` | `["https://<frontend>.up.railway.app"]` (exact frontend URL, JSON list) |
+| Backend | `GEMINI_API_KEY` / `OPENAI_API_KEY` | Optional (heuristic fallback otherwise) |
+| Backend | `IR_API_BASE_URL` / `IR_API_KEY` | Optional (demo timetable otherwise) |
+| Frontend | `NEXT_PUBLIC_API_URL` | `https://<backend>.up.railway.app/api/v1` — set **before first build** (baked into the bundle) |
+
+## Railway deployment instructions
+
+1. Push `main` to GitHub (already done).
+2. Create a Railway project → **New Service → GitHub Repo** → select
+   `Nikky12lol/rail-sway` three times (or once + duplicate), one service each:
+   - **Postgres**: New → Database → PostgreSQL (note its `DATABASE_URL`).
+   - **Backend**: root directory `backend/`, start command from Dockerfile;
+     add variables `DATABASE_URL` (Reference the Postgres service),
+     `SECRET_KEY`, `ALLOWED_ORIGINS`. Generate a public domain.
+   - **Frontend**: root directory `frontend/`; add variable
+     `NEXT_PUBLIC_API_URL=https://<backend-domain>/api/v1`; generate a public
+     domain; redeploy after setting it so the value is baked in.
+3. Open `POST https://<backend-domain>/api/v1/auth/seed-admin` once
+   (admin/admin123) — or just use the app; seed timetable/requests
+   self-populate on first boot.
+4. Judge flow: open the frontend URL → Requests → Timetable → AI Planner →
+   run analysis → Impact → Approve → Decisions. Refresh to confirm persistence.
+
+## How to run the demo (judge script, ~3 min)
+
+Same as “Demo script” above; on production additionally show Settings →
+“Timetable source: Demo timetable” and Decision History persistence across
+browser refresh.
+
+## Important demo limitations
+
+- Timetable is scheduled/seed/uploaded data, not live Indian Railways
+  (unless `IR_API_BASE_URL` is configured) and map markers are scheduled
+  positions, not GPS.
+- Impact, delay and time-saved figures are simulated estimates from the
+  built-in engine, not measured operations.
+- There are no Weekly/Monthly Block Plan pages in this build; the workflow
+  ends at per-block approval + audit history.
+
+## Public URL
+
+- Frontend: `https://<frontend>.up.railway.app` ← give this to judges
+- Backend: `https://<backend>.up.railway.app` (API + `/docs`)
