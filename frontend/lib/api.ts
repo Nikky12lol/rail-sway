@@ -5,16 +5,20 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { 'Content-Type': 'application/json' },
     ...init,
   });
-  if (!res.ok) throw new Error(`API ${path} failed: ${res.status}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({} as any));
+    throw new Error((data as any).detail || `API ${path} failed: ${res.status}`);
+  }
   return res.json() as Promise<T>;
 }
 
 export const api = {
   base: API_BASE,
-  maintenance: () => req<any[]>('/maintenance').catch(() => mockMaintenance),
+  maintenance: (day?: string) =>
+    req<any[]>(`/maintenance${day ? `?day=${day}` : ''}`).catch(() => mockMaintenance),
   maintenanceCreate: (payload: any) => req<any>('/maintenance', { method: 'POST', body: JSON.stringify(payload) }),
-  trainsLive: (section = 'Bhadrak–Jajpur') =>
-    req<{ trains: any[] }>(`/trains/live?section=${encodeURIComponent(section)}`)
+  trainsLive: (section = 'Bhadrak–Jajpur', day?: string) =>
+    req<{ trains: any[] }>(`/trains/live?section=${encodeURIComponent(section)}${day ? `&day=${day}` : ''}`)
       .then((d) => d.trains)
       .catch(() => mockTrains),
   windows: (payload: any) =>
@@ -28,13 +32,18 @@ export const api = {
   trainsColumns: () => req<any>('/trains/columns').catch(() => null),
   sampleCsvUrl: (day?: string, section = 'Bhadrak–Jajpur') =>
     `${API_BASE}/trains/sample?section=${encodeURIComponent(section)}${day ? `&day=${day}` : ''}`,
-  importTimetable: async (file: File) => {
+  importTimetable: async (file: File, opts?: { replace?: boolean; section?: string; day?: string }) => {
     const form = new FormData()
     form.append('file', file)
-    const res = await fetch(`${API_BASE}/trains/import`, { method: 'POST', body: form })
+    const q = new URLSearchParams()
+    if (opts?.replace) q.set('replace', 'true')
+    if (opts?.section) q.set('section', opts.section)
+    if (opts?.day) q.set('day', opts.day)
+    const qs = q.toString() ? `?${q.toString()}` : ''
+    const res = await fetch(`${API_BASE}/trains/import${qs}`, { method: 'POST', body: form })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(data.detail || `Import failed: ${res.status}`)
-    return data as { imported: number; skipped_duplicates: number; rejected: number; errors: { row: number; reason: string }[] }
+    return data as { imported: number; skipped_duplicates: number; rejected: number; cleared: number; errors: { row: number; reason: string }[] }
   },
 };
 

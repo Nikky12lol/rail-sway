@@ -39,4 +39,5 @@ class TrainImportResult(BaseModel):
     imported: int = 0
     skipped_duplicates: int = 0
     rejected: int = 0
+    cleared: int = 0
     errors: List[ImportError] = []

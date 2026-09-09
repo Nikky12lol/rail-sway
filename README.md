@@ -133,7 +133,7 @@ npm run dev   # Windows shells with blocked .ps1: use npm.cmd run dev
 | GET | /api/v1/trains/sample?day=&section= | Generates a same-date sample CSV |
 | POST | /api/v1/trains/import | CSV/XLSX upload → `{imported, skipped_duplicates, rejected, errors[]}` |
 | POST | /api/v1/ai/compatibility | Group requests into block clubs |
-| POST | /api/v1/ai/windows | Top-3 windows (persisted, now with `affected_train_ids`) |
+| POST | /api/v1/ai/windows | All evaluated windows, ranked (persisted with `affected_train_ids`) |
 | POST | /api/v1/ai/recommend | Pick best window |
 | POST | /api/v1/ai/full-plan | compat + windows + recommendation + log; persists explanation on best block |
 | GET/POST | /api/v1/blocks, /blocks/{id}/decision | Approve/reject (writes audit log, cascades request status) |

@@ -1,7 +1,10 @@
 from fastapi import APIRouter, Depends, Query
 from typing import Optional, List
+from datetime import date
 from sqlalchemy.orm import Session
+from sqlalchemy import func, or_
 from app.core.database import get_db
+from app.models.maintenance import MaintenanceRequest
 from app.schemas.maintenance import MaintenanceCreate, MaintenanceUpdate, MaintenanceOut
 from app.services.maintenance_service import MaintenanceService
 
@@ -11,8 +14,22 @@ service = MaintenanceService()
 
 @router.get("", response_model=List[MaintenanceOut])
 def list_requests(status: Optional[str] = Query(None), section: Optional[str] = Query(None),
+                  day: Optional[date] = Query(None, description="Filter by requested operating date"),
                   skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return service.list(db, status=status, section=section, skip=skip, limit=limit)
+    q = db.query(MaintenanceRequest)
+    if status:
+        q = q.filter(MaintenanceRequest.status == status)
+    if section:
+        q = q.filter(MaintenanceRequest.section == section)
+    if day:
+        # requested_date when set, otherwise the submission date
+        q = q.filter(or_(
+            MaintenanceRequest.requested_date == day,
+            (MaintenanceRequest.requested_date.is_(None)) & (func.date(MaintenanceRequest.created_at) == day.isoformat()),
+        ))
+    if not day and not status and not section:
+        return service.list(db, skip=skip, limit=limit)
+    return q.order_by(MaintenanceRequest.created_at.desc()).offset(skip).limit(limit).all()
 
 
 @router.post("", response_model=MaintenanceOut, status_code=201)

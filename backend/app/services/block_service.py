@@ -46,6 +46,11 @@ class BlockService:
         if decision not in ("approved", "rejected"):
             raise HTTPException(status_code=400, detail="decision must be approved|rejected")
         obj = self.get(db, window_id)
+        if obj.controller_decision in ("approved", "rejected"):
+            raise HTTPException(
+                status_code=409,
+                detail=f"Block already {obj.controller_decision}; duplicate decisions are not recorded",
+            )
         obj.controller_decision = decision
         obj.status = decision
         obj.approved_by = user_id

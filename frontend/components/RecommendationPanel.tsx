@@ -7,12 +7,14 @@ export default function RecommendationPanel({
   onApprove,
   onReject,
   busy,
+  decided,
 }: {
   reason: string
   confidence: string
   onApprove: () => void
   onReject: () => void
   busy?: boolean
+  decided?: string | null
 }) {
   return (
     <div className="bg-white rounded-2xl shadow-soft border border-slate-200/60 border-l-4 border-l-primary-500 p-6">
@@ -23,6 +25,11 @@ export default function RecommendationPanel({
         </span>
       </div>
       <p className="text-sm text-slate-600 leading-relaxed">{reason}</p>
+      {decided ? (
+        <p className={`mt-4 text-sm font-medium px-4 py-2.5 rounded-xl ${decided === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
+          Already {decided} — duplicate decisions are not recorded. Review another candidate instead.
+        </p>
+      ) : (
       <div className="mt-5 flex gap-3">
         <button onClick={onApprove} disabled={busy} className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-medium shadow-sm shadow-primary-600/25 transition-all hover:bg-primary-700 hover:shadow-md active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none">
           <CheckCircle2 className="w-4 h-4" /> Approve Block
@@ -31,6 +38,7 @@ export default function RecommendationPanel({
           <XCircle className="w-4 h-4" /> Reject
         </button>
       </div>
+      )}
     </div>
   )
 }

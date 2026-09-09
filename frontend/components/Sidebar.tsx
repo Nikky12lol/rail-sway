@@ -55,7 +55,7 @@ export default function Sidebar() {
         v1.1.0 · BHC–JJKR ·{' '}
         <span className="inline-flex items-center gap-1.5">
           <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
-          Live
+          Demo data
         </span>
       </div>
     </aside>

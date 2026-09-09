@@ -41,11 +41,34 @@ class TrainService:
                     "section": r.section,
                     "scheduled_time": r.scheduled_time,
                     "status": r.status,
+                    "source": r.source or "seed",
                 }
                 for r in day_rows
             ]
         live = await self.ir.fetch_trains(section, d)
+        origin = "live" if self.ir.base_url else "demo"
+        for t in live:
+            t["source"] = origin
         return live
+
+    def clear_uploaded(self, db: Session, section: Optional[str] = None, day: Optional[date] = None) -> int:
+        """Delete previously uploaded timetable rows (safe replace-before-import).
+
+        Only touches source='upload' rows, optionally scoped to section and/or
+        operating date. Seed/demo rows are never deleted.
+        """
+        q = db.query(Train).filter(Train.source == "upload")
+        if section:
+            q = q.filter(Train.section == section)
+        if day:
+            rows = q.all()
+            ids = [r.id for r in rows if r.scheduled_time and r.scheduled_time.date() == day]
+            n = db.query(Train).filter(Train.id.in_(ids)).delete(synchronize_session=False) if ids else 0
+            db.commit()
+            return n
+        n = q.delete(synchronize_session=False)
+        db.commit()
+        return n
 
     def seed_if_empty(self, db: Session, section: str = "Bhadrak–Jajpur") -> int:
         if db.query(Train).count() > 0:

@@ -44,13 +44,20 @@ export default function ImpactPage({ params }: { params: Promise<{ windowId: str
   }, [windowId])
 
   const decide = async (decision: string) => {
+    if (block.controller_decision) {
+      setMsg(`Already ${block.controller_decision} — duplicate decisions are not recorded.`)
+      return
+    }
     setBusy(true); setMsg('')
     try {
       const updated = await api.decide(Number(windowId), decision)
       setBlock(updated)
       setMsg(`Block ${decision} and recorded in the audit trail.`)
     } catch (e: any) {
-      setMsg(`Backend unreachable — decision not recorded (${e.message}).`)
+      setMsg(/409|already/i.test(e.message || '') ? `Already decided: ${e.message}` : `Decision failed (${e.message}).`)
+      // refresh: another session may have decided meanwhile
+      const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
+      fetch(`${base}/blocks/${windowId}`).then((r) => (r.ok ? r.json() : null)).then((b) => b && setBlock(b)).catch(() => {})
     } finally {
       setBusy(false)
     }
@@ -143,6 +150,7 @@ export default function ImpactPage({ params }: { params: Promise<{ windowId: str
         onApprove={() => decide('approved')}
         onReject={() => decide('rejected')}
         busy={busy}
+        decided={block.controller_decision}
       />
       {msg && <p className="mt-3 text-sm text-slate-600">{msg} <Link href="/decisions" className="font-medium text-primary-600 hover:underline">View in Decision History →</Link></p>}
       {block.controller_decision && (

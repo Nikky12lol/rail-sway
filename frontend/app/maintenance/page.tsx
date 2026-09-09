@@ -31,14 +31,16 @@ export default function MaintenancePage() {
   const [showForm, setShowForm] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [day, setDay] = useState('') // '' = all dates
 
-  const load = async () => {
+  const load = async (d = day) => {
     setLoading(true); setError('')
     try {
-      setRows(await api.maintenance())
-    } catch (e: any) {
+      setRows(await api.maintenance(d || undefined))
+    } catch {
+      setRows([])
       setError('Backend unreachable — showing cached demo data.')
-      setRows(await api.maintenance().catch(() => []))
+      setRows(await api.maintenance(d || undefined).catch(() => []))
     } finally {
       setLoading(false)
     }
@@ -77,6 +79,16 @@ export default function MaintenancePage() {
 
       {showForm && <MaintenanceForm onCreated={() => { setShowForm(false); load() }} onCancel={() => setShowForm(false)} />}
       {error && <p className="mb-5 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">{error}</p>}
+
+      <div className="flex items-center gap-3 mb-4">
+        <label className="text-sm font-medium text-slate-700">Requested date
+          <input type="date" value={day} onChange={(e) => { setDay(e.target.value); load(e.target.value) }} className="ml-2 border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
+        </label>
+        {day && (
+          <button onClick={() => { setDay(''); load('') }} className="text-sm font-medium text-primary-600 hover:underline">Show all dates</button>
+        )}
+        <span className="ml-auto text-sm text-slate-500">{rows.length} request(s){day ? ` for ${day}` : ''}</span>
+      </div>
 
       <div className="bg-white rounded-2xl shadow-soft border border-slate-200/60 overflow-hidden">
         <div className="overflow-x-auto">

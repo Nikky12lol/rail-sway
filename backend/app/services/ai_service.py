@@ -188,7 +188,10 @@ class RailSwayAI:
                 }
             )
         windows.sort(key=lambda x: x["impact_score"])
-        return windows[:3]
+        # Return every evaluated window, not just the top 3: on sparse days the
+        # empty (zero-impact) windows would otherwise crowd out the windows
+        # that actually overlap trains, hiding the interesting candidates.
+        return windows
 
     def _simulate_impact(self, start: datetime, end: datetime, schedules: List[Dict], base_tsr: bool = False):
         affected = []

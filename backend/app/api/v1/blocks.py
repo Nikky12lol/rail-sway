@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from typing import Optional, List
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.security import get_optional_user
 from app.schemas.block import BlockOut, BlockDecision
 from app.services.block_service import BlockService
 
@@ -21,6 +22,7 @@ def get_block(window_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{window_id}/decision", response_model=BlockOut)
-def decide_block(window_id: int, payload: BlockDecision, db: Session = Depends(get_db)):
-    # user optional for demo; pass None
-    return service.decide(db, window_id, payload.decision, user_id=None)
+def decide_block(window_id: int, payload: BlockDecision, db: Session = Depends(get_db), user=Depends(get_optional_user)):
+    # Auth-aware: records the controller when a Bearer token is supplied,
+    # stays usable without one for the prototype demo.
+    return service.decide(db, window_id, payload.decision, user_id=user.id if user else None)

@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -9,16 +9,19 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    try:
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    except (ValueError, AttributeError):
+        return False
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -41,8 +44,7 @@ def decode_token(token: str) -> dict:
         ) from e
 
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    # Lazy import to avoid circular imports
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):    # Lazy import to avoid circular imports
     from app.models.user import User
 
     payload = decode_token(token)
@@ -52,6 +54,30 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     user = db.query(User).filter(User.username == username).first()
     if user is None or not user.is_active:
         raise HTTPException(status_code=401, detail="User not found or inactive")
+    return user
+
+
+def get_optional_user(
+    token: Optional[str] = Depends(oauth2_scheme_optional), db: Session = Depends(get_db)
+):
+    """Auth-aware but not auth-required: returns the user when a valid Bearer
+    token is supplied, else None. Lets the prototype record who decided
+    without breaking token-less demo use."""
+    if not token:
+        return None
+    try:
+        payload = decode_token(token)
+    except HTTPException:
+        return None
+    username: Optional[str] = payload.get("sub")
+    if not username:
+        return None
+    # Lazy import to avoid circular imports
+    from app.models.user import User
+
+    user = db.query(User).filter(User.username == username).first()
+    if user is None or not user.is_active:
+        return None
     return user
 
 

@@ -4,13 +4,17 @@ import Link from 'next/link'
 import { Upload, Download, FileWarning } from 'lucide-react'
 import { api } from '@/lib/api'
 
-type ImportStats = { imported: number; skipped_duplicates: number; rejected: number; errors: { row: number; reason: string }[] }
+type ImportStats = { imported: number; skipped_duplicates: number; rejected: number; cleared: number; errors: { row: number; reason: string }[] }
 
 const prioBadge = (p: number) =>
   p <= 1 ? 'bg-rose-100 text-rose-700' : p === 2 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
 
+// SOURCE labels: uploaded | seed (demo) | demo (generated fallback) | live (external feed)
 const srcBadge = (s?: string) =>
-  s === 'upload' ? 'bg-primary-100 text-primary-700' : 'bg-slate-100 text-slate-500'
+  s === 'upload' ? ['uploaded', 'bg-primary-100 text-primary-700']
+  : s === 'live' ? ['external', 'bg-emerald-100 text-emerald-700']
+  : s === 'demo' ? ['demo schedule', 'bg-amber-100 text-amber-700']
+  : ['seed demo', 'bg-slate-100 text-slate-500']
 
 function fmtTime(iso: string) {
   try {
@@ -28,10 +32,11 @@ export default function TimetablePage() {
   const [stats, setStats] = useState<ImportStats | null>(null)
   const [uploadError, setUploadError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [replace, setReplace] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const load = async (sec = section, d = day) => {
-    const t = await api.trainsLive(sec).catch(() => [])
+    const t = await api.trainsLive(sec, d).catch(() => [])
     setTrains(Array.isArray(t) ? t : [])
   }
 
@@ -45,7 +50,7 @@ export default function TimetablePage() {
     if (!f) return
     setBusy(true); setUploadError(''); setStats(null)
     try {
-      const s = await api.importTimetable(f)
+      const s = await api.importTimetable(f, replace ? { replace: true, section, day } : undefined)
       setStats(s)
       await load()
     } catch (e: any) {
@@ -57,6 +62,7 @@ export default function TimetablePage() {
   }
 
   const uploaded = trains.filter((t) => t.source === 'upload').length
+  const external = trains.some((t) => t.source === 'live')
 
   return (
     <div>
@@ -81,7 +87,7 @@ export default function TimetablePage() {
           ['Trains loaded', trains.length],
           ['Uploaded rows', uploaded],
           ['Seed / demo rows', trains.length - uploaded],
-          ['Section', section.split('–')[0]],
+          ['Operating date', day.split('-').reverse().join('/')],
         ].map(([k, v]) => (
           <div key={k as string} className="bg-white rounded-2xl shadow-soft border border-slate-200/60 p-5">
             <div className="text-2xl font-bold text-slate-800">{v as string | number}</div>
@@ -102,8 +108,12 @@ export default function TimetablePage() {
           <label className="text-sm font-medium text-slate-700">Operating date
             <input type="date" value={day} onChange={(e) => { setDay(e.target.value); load(section, e.target.value) }} className="ml-2 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
           </label>
-          <span className={`ml-auto text-xs font-medium px-3 py-1.5 rounded-full ${uploaded ? 'bg-primary-100 text-primary-700' : 'bg-amber-100 text-amber-700'}`}>
-            {uploaded ? `${uploaded} uploaded timetable row(s) in view` : 'Showing seed demo timetable — upload a file to replace it'}
+          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+            <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} className="accent-primary-600 w-4 h-4" />
+            Replace uploaded rows for this section/date on import
+          </label>
+          <span className={`ml-auto text-xs font-medium px-3 py-1.5 rounded-full ${external ? 'bg-emerald-100 text-emerald-700' : uploaded ? 'bg-primary-100 text-primary-700' : 'bg-amber-100 text-amber-700'}`}>
+            {external ? 'External timetable feed' : uploaded ? `${uploaded} uploaded timetable row(s) in view` : 'Demo timetable — upload a file to replace it'}
           </span>
         </div>
         <p className="mt-4 text-xs text-slate-500 leading-relaxed">
@@ -122,7 +132,8 @@ export default function TimetablePage() {
         <div className="bg-white rounded-2xl shadow-soft border border-slate-200/60 p-6 mb-6">
           <h3 className="font-semibold text-slate-800 mb-3">Import result</h3>
           <div className="flex flex-wrap gap-2 text-sm">
-            <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 font-medium">{stats.imported} imported</span>
+            <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 font-medium">{stats.imported} valid rows imported</span>
+            {stats.cleared > 0 && <span className="px-3 py-1 rounded-full bg-primary-100 text-primary-700 font-medium">{stats.cleared} old uploaded rows cleared</span>}
             <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-600 font-medium">{stats.skipped_duplicates} duplicates skipped</span>
             <span className={`px-3 py-1 rounded-full font-medium ${stats.rejected ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>{stats.rejected} rejected</span>
           </div>
@@ -145,18 +156,21 @@ export default function TimetablePage() {
               </tr>
             </thead>
             <tbody>
-              {trains.map((t) => (
-                <tr key={`${t.train_number}-${t.scheduled_time}`} className="border-b border-slate-100 last:border-0 transition-colors hover:bg-primary-50/50">
-                  <td className="py-3 px-4 font-mono font-medium text-slate-800 whitespace-nowrap">{t.train_number}</td>
-                  <td className="py-3 px-4 text-slate-600">{t.train_name}</td>
-                  <td className="py-3 px-4 text-slate-600 whitespace-nowrap">{t.origin || '?'} → {t.destination || '?'}</td>
-                  <td className="py-3 px-4 text-slate-600 whitespace-nowrap">{t.section}</td>
-                  <td className="py-3 px-4 text-slate-600 whitespace-nowrap">{fmtTime(t.scheduled_time)}</td>
-                  <td className="py-3 px-4"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${prioBadge(t.priority)}`}>P{t.priority}</span></td>
-                  <td className="py-3 px-4 text-slate-600">{t.status}</td>
-                  <td className="py-3 px-4"><span className={`px-2 py-0.5 rounded-full text-xs font-medium uppercase ${srcBadge(t.source)}`}>{t.source === 'upload' ? 'uploaded' : 'seed demo'}</span></td>
-                </tr>
-              ))}
+              {trains.map((t) => {
+                const [srcLabel, srcCls] = srcBadge(t.source)
+                return (
+                  <tr key={`${t.train_number}-${t.scheduled_time}`} className="border-b border-slate-100 last:border-0 transition-colors hover:bg-primary-50/50">
+                    <td className="py-3 px-4 font-mono font-medium text-slate-800 whitespace-nowrap">{t.train_number}</td>
+                    <td className="py-3 px-4 text-slate-600">{t.train_name}</td>
+                    <td className="py-3 px-4 text-slate-600 whitespace-nowrap">{t.origin || '?'} → {t.destination || '?'}</td>
+                    <td className="py-3 px-4 text-slate-600 whitespace-nowrap">{t.section}</td>
+                    <td className="py-3 px-4 text-slate-600 whitespace-nowrap">{fmtTime(t.scheduled_time)}</td>
+                    <td className="py-3 px-4"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${prioBadge(t.priority)}`}>P{t.priority}</span></td>
+                    <td className="py-3 px-4 text-slate-600">{t.status}</td>
+                    <td className="py-3 px-4"><span className={`px-2 py-0.5 rounded-full text-xs font-medium uppercase ${srcCls}`}>{srcLabel}</span></td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

@@ -45,7 +45,7 @@ async def find_windows(request: WindowRequest, db: Session = Depends(get_db)):
     saved = []
     for w in windows:
         obj = block_service.create_from_candidate(db, request.section, w, maintenance_ids=request.request_ids)
-        saved.append({"id": obj.id, **w})
+        saved.append({"id": obj.id, "section": request.section, **w})
     return {"windows": saved}
 
 

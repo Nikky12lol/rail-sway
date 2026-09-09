@@ -22,7 +22,7 @@ def list_trains(section: Optional[str] = Query(None), skip: int = 0, limit: int 
 
 @router.post("", response_model=TrainOut, status_code=201)
 def create_train(payload: TrainCreate, db: Session = Depends(get_db)):
-    obj = Train(**payload.model_dump())
+    obj = Train(**payload.model_dump(), source="manual")
     db.add(obj)
     db.commit()
     db.refresh(obj)
@@ -130,7 +130,9 @@ def sample_csv(day: Optional[date] = None, section: str = "Bhadrak–Jajpur"):
 
 
 @router.post("/import", response_model=TrainImportResult)
-async def import_timetable(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def import_timetable(file: UploadFile = File(...), replace: bool = Query(False, description="Delete previously uploaded rows for this section/date before importing"),
+                           section: Optional[str] = Query(None), day: Optional[date] = Query(None),
+                           db: Session = Depends(get_db)):
     name = (file.filename or "").lower()
     content = await file.read()
     if not content:
@@ -143,4 +145,6 @@ async def import_timetable(file: UploadFile = File(...), db: Session = Depends(g
         raise HTTPException(status_code=400, detail="Only .csv and .xlsx files are supported")
     if not rows:
         raise HTTPException(status_code=400, detail="No data rows found in file")
-    return service.import_timetable(db, rows)
+    cleared = service.clear_uploaded(db, section=section, day=day) if replace else 0
+    stats = service.import_timetable(db, rows)
+    return {**stats, "cleared": cleared}
