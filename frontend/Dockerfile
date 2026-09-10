@@ -7,7 +7,11 @@ FROM node:18-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# NEXT_PUBLIC_* vars are baked in here: set them in the host before building.
+# Passed explicitly (ARG) so Railway/production builds definitely bake the
+# backend URL into the bundle via `npm run build`. Falls back to the
+# frontend/.env.local value (localhost) for local image builds.
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 RUN npm run build
 
 FROM node:18-alpine AS runner

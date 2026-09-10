@@ -1,30 +1,26 @@
-const DEV_API_BASE = 'http://localhost:8000/api/v1';
-
 /**
  * Single source of truth for the backend URL.
- * - Build time: NEXT_PUBLIC_API_URL is baked into the bundle (set it on the
- *   host BEFORE building, e.g. Railway frontend service variable).
- * - Local dev: falls back to localhost.
- * - Production without the variable: still falls back (last resort) but logs
- *   a loud misconfiguration error instead of failing silently.
+ *
+ * NEXT_PUBLIC_API_URL is inlined by Next.js at BUILD time. The Dockerfile
+ * passes it explicitly (ARG/ENV), so a Railway build bakes the production
+ * backend URL into the bundle and the localhost literal below is eliminated
+ * from production output entirely.
+ *
+ * Local development keeps working via frontend/.env.local. If the variable
+ * is missing on a non-localhost host, a loud misconfiguration error is
+ * logged instead of failing silently.
  */
-function resolveApiBase(): string {
-  const configured = process.env.NEXT_PUBLIC_API_URL;
-  if (configured) return configured;
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname;
-    const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
-    if (!isLocal) {
-      console.error(
-        'Rail-Sway misconfigured: NEXT_PUBLIC_API_URL is not set, so API calls fall back to localhost. ' +
-        'Set NEXT_PUBLIC_API_URL to the backend URL and rebuild/redeploy the frontend.'
-      );
-    }
-  }
-  return DEV_API_BASE;
-}
+const API_BASE: string = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
-const API_BASE = resolveApiBase();
+if (typeof window !== 'undefined' && !process.env.NEXT_PUBLIC_API_URL) {
+  const host = window.location.hostname;
+  if (host !== 'localhost' && host !== '127.0.0.1' && host !== '[::1]') {
+    console.error(
+      'Rail-Sway misconfigured: NEXT_PUBLIC_API_URL is not set for this production host. ' +
+        'Set it on the frontend service and rebuild/redeploy.'
+    );
+  }
+}
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response
@@ -44,7 +40,6 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  base: API_BASE,
   maintenance: (day?: string) =>
     req<any[]>(`/maintenance${day ? `?day=${day}` : ''}`).catch(() => mockMaintenance),
   maintenanceCreate: (payload: any) => req<any>('/maintenance', { method: 'POST', body: JSON.stringify(payload) }),
